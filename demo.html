@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Assistant — {{ user_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=DM+Mono&display=swap" rel="stylesheet"/>
+
+  <!-- SDK scripts (hidden from users — no brand names in UI) -->
+  <script src="{{ url_for('static', filename='avatar-sdk.js') }}"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #f0f2f7;
+      --surface:  #ffffff;
+      --surface2: #f7f8fc;
+      --border:   #dde1ea;
+      --accent:   #3b6ef8;
+      --accent2:  #6c47ff;
+      --text:     #18213a;
+      --sub:      #6b7a99;
+      --green:    #22c55e;
+      --red:      #ef4444;
+      --amber:    #f59e0b;
+      --blue-mist:#e8eeff;
+      --sans:     'DM Sans', sans-serif;
+      --mono:     'DM Mono', monospace;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 10% 10%, rgba(59,110,248,.08) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 60% at 90% 90%, rgba(108,71,255,.06) 0%, transparent 60%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ════════════════════════
+       LAYOUT GRID
+    ════════════════════════ */
+    .app {
+      position: relative; z-index: 1;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 56px 1fr 90px;
+      grid-template-columns: 1fr 320px;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      grid-column: 1 / -1;
+      display: flex; align-items: center;
+      padding: 0 24px; gap: 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 4px rgba(30,40,90,.04);
+    }
+
+    .topbar-icon {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem;
+    }
+
+    .topbar-name {
+      font-size: .9rem; font-weight: 600; color: var(--text);
+    }
+
+    .topbar-sep { flex: 1; }
+
+    .topbar-chip {
+      font-size: .72rem; font-weight: 500;
+      color: var(--sub);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+    }
+
+    .topbar-user {
+      font-size: .8rem; font-weight: 500;
+      color: var(--text);
+      background: var(--blue-mist);
+      border-radius: 20px;
+      padding: 5px 14px;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2.4s ease infinite;
+      flex-shrink: 0;
+    }
+    .status-dot.amber { background: var(--amber); animation-delay: .5s; }
+    .status-dot.red   { background: var(--red);   animation: none; }
+
+    /* ── Avatar area ── */
+    .avatar-area {
+      grid-column: 1; grid-row: 2;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 28px;
+      gap: 16px;
+    }
+
+    .avatar-frame {
+      position: relative;
+      width: 100%; max-width: 660px;
+      aspect-ratio: 16/9;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #e8eaf2;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 32px rgba(30,40,90,.10);
+      transition: box-shadow .3s;
+    }
+
+    .avatar-frame.speaking {
+      box-shadow: 0 0 0 3px rgba(59,110,248,.35), 0 4px 32px rgba(30,40,90,.12);
+    }
+
+    #avatar-video {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+    }
+
+    /* Loading overlay */
+    .avatar-overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      background: rgba(240,242,247,.96);
+      transition: opacity .4s;
+    }
+    .avatar-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .loader-ring {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .loader-text {
+      font-size: .8rem; font-weight: 500;
+      color: var(--sub);
+    }
+
+    /* Avatar status bar */
+    .avatar-status {
+      display: flex; align-items: center; gap: 12px;
+      width: 100%; max-width: 660px;
+    }
+
+    .avatar-label {
+      font-size: .82rem; font-weight: 600; color: var(--text);
+    }
+
+    .state-badge {
+      font-size: .7rem; font-weight: 500;
+      padding: 3px 10px; border-radius: 20px;
+      background: var(--blue-mist);
+      color: var(--accent);
+      transition: background .2s, color .2s;
+    }
+
+    .state-badge.speaking {
+      background: rgba(59,110,248,.12);
+      color: var(--accent);
+    }
+
+    .state-badge.error {
+      background: rgba(239,68,68,.10);
+      color: var(--red);
+    }
+
+    /* ── Right sidebar ── */
+    .sidebar {
+      grid-column: 2; grid-row: 2;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-title {
+      font-size: .72rem; font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--sub);
+    }
+
+    /* Metrics */
+    .metrics {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 8px; padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .metric {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .metric-label {
+      font-size: .62rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .08em;
+      color: var(--sub); margin-bottom: 4px;
+    }
+
+    .metric-value {
+      font-family: var(--mono);
+      font-size: .95rem; color: var(--accent);
+    }
+
+    /* Conversation log */
+    .conv-title {
+      padding: 12px 18px 4px;
+      font-size: .72rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .08em;
+      color: var(--sub);
+    }
+
+    .conv-log {
+      flex: 1; overflow-y: auto;
+      padding: 8px 18px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    .conv-log::-webkit-scrollbar { width: 4px; }
+    .conv-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .msg {
+      font-size: .78rem; line-height: 1.55;
+      padding: 9px 12px;
+      border-radius: 10px;
+      animation: fadeIn .25s ease;
+    }
+
+    .msg.user {
+      background: var(--blue-mist);
+      color: var(--text);
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg.ai {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg-source {
+      font-size: .62rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: var(--sub); margin-bottom: 3px;
+    }
+
+    /* ── Bottom bar ── */
+    .bottombar {
+      grid-column: 1 / -1; grid-row: 3;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 24px; gap: 16px;
+      box-shadow: 0 -1px 4px rgba(30,40,90,.04);
+    }
+
+    .voice-label {
+      font-size: .78rem; font-weight: 500;
+      color: var(--sub); flex-shrink: 0;
+    }
+
+    .voice-wrap {
+      flex: 1;
+      display: flex; align-items: center;
+    }
+
+    .ctrl-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--sub);
+      font-family: var(--sans); font-size: .78rem; font-weight: 500;
+      padding: 8px 16px; border-radius: 8px;
+      cursor: pointer; flex-shrink: 0;
+      transition: all .18s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--blue-mist); }
+    .ctrl-btn.danger:hover { border-color: var(--red); color: var(--red); background: rgba(239,68,68,.06); }
+
+    /* ── Animations ── */
+    .start-btn {
+      margin-top: 8px;
+      background: linear-gradient(130deg, var(--accent), var(--accent2));
+      border: none; border-radius: 10px;
+      color: #fff; font-family: var(--sans);
+      font-size: .9rem; font-weight: 600;
+      padding: 12px 32px; cursor: pointer;
+      box-shadow: 0 3px 14px rgba(59,110,248,.30);
+      transition: opacity .18s, transform .15s;
+    }
+    .start-btn:hover { opacity: .9; transform: translateY(-1px); }
+    .start-btn.hidden { display: none; }
+
+    @keyframes spin    { to { transform: rotate(360deg); } }
+    @keyframes pulse   { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+    @keyframes fadeIn  { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══ TOP BAR ══ -->
+  <header class="topbar">
+    <div class="topbar-icon">🤖</div>
+    <span class="topbar-name">AI Assistant</span>
+    <span class="topbar-sep"></span>
+    <span class="topbar-chip" id="session-chip">Connecting…</span>
+    <div class="status-dot" id="conn-dot" style="background:var(--amber)"></div>
+    <div class="topbar-user">{{ user_name }}</div>
+  </header>
+
+  <!-- ══ AVATAR AREA ══ -->
+  <main class="avatar-area">
+    <div class="avatar-frame" id="avatar-frame">
+      <video id="avatar-video" autoplay playsinline></video>
+
+      <div class="avatar-overlay" id="avatar-overlay">
+        <div class="loader-ring" id="loader-ring"></div>
+        <div class="loader-text" id="overlay-msg">Click to begin</div>
+        <button class="start-btn" id="start-btn" onclick="handleStart()">&#9654; Start Session</button>
+      </div>
+    </div>
+
+    <div class="avatar-status">
+      <div class="status-dot" id="avatar-dot" style="background:var(--amber)"></div>
+      <span class="avatar-label">{{ user_name }}'s Session</span>
+      <span class="state-badge" id="state-badge">Loading</span>
+    </div>
+  </main>
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-title">Session Info</div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">Exchanges</div>
+        <div class="metric-value" id="metric-exchanges">0</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Responses</div>
+        <div class="metric-value" id="metric-ai">0</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Words</div>
+        <div class="metric-value" id="metric-words">0</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Latency</div>
+        <div class="metric-value" id="metric-latency">—</div>
+      </div>
+    </div>
+
+    <div class="conv-title">Conversation</div>
+    <div class="conv-log" id="conv-log">
+      <div class="msg ai">
+        <div class="msg-source">Assistant</div>
+        Session ready for {{ user_name }}.
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ BOTTOM BAR ══ -->
+  <footer class="bottombar">
+    <span class="voice-label" id="mic-label">🎤 Speak to the assistant</span>
+    <div class="voice-wrap" style="flex:1"></div>
+    <button class="ctrl-btn mic-btn" id="btn-mic" onclick="toggleMic()">🎙 Mute</button>
+    <button class="ctrl-btn" id="btn-interrupt">Stop</button>
+    <button class="ctrl-btn danger" id="btn-end">End Session</button>
+  </footer>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════════════
+const CONFIG = {
+  userName: {{ user_name | tojson }},
+  avatarId: {{ avatar_id | tojson }},
+};
+
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+let avatarInstance = null;
+let sessionActive  = false;
+let metrics = { exchanges: 0, aiTurns: 0, words: 0 };
+let pingTs  = 0;
+
+const overlay    = document.getElementById('avatar-overlay');
+const overlayMsg = document.getElementById('overlay-msg');
+const videoEl    = document.getElementById('avatar-video');
+const stateBadge = document.getElementById('state-badge');
+const avatarDot  = document.getElementById('avatar-dot');
+const connDot    = document.getElementById('conn-dot');
+const sessionChip= document.getElementById('session-chip');
+const convLog    = document.getElementById('conv-log');
+const avatarFrame= document.getElementById('avatar-frame');
+
+// ══════════════════════════════════════════════════════════
+//  UTILITIES
+// ══════════════════════════════════════════════════════════
+function setOverlay(msg)  { overlayMsg.textContent = msg; }
+function hideOverlay()    { overlay.classList.add('hidden'); }
+
+function setState(label, type = 'idle') {
+  stateBadge.textContent = label;
+  stateBadge.className = 'state-badge' + (type !== 'idle' ? ' ' + type : '');
+}
+
+function addMsg(source, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${source}`;
+  div.innerHTML = `<div class="msg-source">${source === 'user' ? CONFIG.userName : 'Assistant'}</div>${escHtml(text)}`;
+  convLog.appendChild(div);
+  convLog.scrollTop = convLog.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function updateMetrics() {
+  document.getElementById('metric-exchanges').textContent = metrics.exchanges;
+  document.getElementById('metric-ai').textContent        = metrics.aiTurns;
+  document.getElementById('metric-words').textContent     = metrics.words;
+}
+
+function setLatency(ms) {
+  document.getElementById('metric-latency').textContent = ms + 'ms';
+}
+
+// ══════════════════════════════════════════════════════════
+//  LIVEAVATAR
+// ══════════════════════════════════════════════════════════
+async function initAvatar() {
+  setOverlay('Connecting…');
+  setState('Connecting', 'speaking');
+
+  let token;
+  try {
+    const r = await fetch('/api/heygen-token', { method: 'POST' });
+    const d = await r.json();
+    console.log('[Avatar] token endpoint response:', d);
+    if (d.error) throw new Error(d.error + ' | raw: ' + JSON.stringify(d.raw || {}));
+    token = d.token;  // JWT — session_id is embedded inside it
+    activeSessionId = d.session_id;
+    if (!token) throw new Error('token missing — check Flask terminal');
+  } catch (err) {
+    setOverlay('Connection failed: ' + err.message);
+    setState('Error', 'error');
+    connDot.classList.add('red');
+    return;
+  }
+
+  const SDK = window.LiveAvatarSDK || {};
+  const LiveAvatarSession = SDK.LiveAvatarSession;
+  if (!LiveAvatarSession) {
+    setOverlay('SDK not loaded — ensure static/avatar-sdk.js exists');
+    setState('Error', 'error');
+    return;
+  }
+
+  // Correct constructor: LiveAvatarSession(sessionToken, config)
+  avatarInstance = new LiveAvatarSession(token, { voiceChat: true });
+
+  // ── Correct event names from SDK source ──────────────────────────────
+  avatarInstance.on('session.stream_ready', () => {
+    // SDK uses attach() — not srcObject
+    avatarInstance.attach(videoEl);
+    videoEl.muted = false;  // avatar handles its own audio
+    hideOverlay();
+    sessionActive = true;
+    setState('Active');
+    avatarDot.style.background = 'var(--green)';
+    connDot.style.background   = 'var(--green)';
+    sessionChip.textContent    = 'Live';
+  });
+
+  avatarInstance.on('avatar.speak_started', () => {
+    setState('Speaking', 'speaking');
+    avatarFrame.classList.add('speaking');
+    avatarDot.style.background = 'var(--accent)';
+    pingTs = Date.now();
+  });
+
+  avatarInstance.on('avatar.speak_ended', () => {
+    setState('Active');
+    avatarFrame.classList.remove('speaking');
+    avatarDot.style.background = 'var(--green)';
+    if (pingTs) setLatency(Math.round(Date.now() - pingTs));
+  });
+
+  avatarInstance.on('session.disconnected', (reason) => {
+    console.log('[Avatar] disconnected:', reason);
+    setState('Disconnected', 'error');
+    sessionActive = false;
+    sessionChip.textContent = 'Disconnected';
+    setOverlay('Session ended');
+    overlay.classList.remove('hidden');
+  });
+
+  setOverlay('Starting avatar…');
+  try {
+    await avatarInstance.start();
+  } catch (err) {
+    setOverlay('Error: ' + err.message);
+    setState('Error', 'error');
+    console.error('[Avatar] start error:', err);
+    return;
+  }
+  // Greeting — silently ignored in LITE mode (avatar can't be scripted)
+  try { avatarInstance.message(`Hello ${CONFIG.userName}. How can I help you today?`); } catch (_) {}
+}
+
+function speakAsAvatar(text) {
+  if (!avatarInstance || !sessionActive) return;
+  // LITE mode: avatar manages its own responses via voice — text injection ignored
+  // FULL mode: swap to avatarInstance.repeat(text) for exact text
+  try { avatarInstance.message(text); } catch (_) {}
+}
+
+async function interruptAvatar() {
+  if (!avatarInstance || !sessionActive) return;
+  try { avatarInstance.interrupt(); } catch (e) {}
+}
+
+// ══════════════════════════════════════════════════════════
+//  MIC CONTROL
+// ══════════════════════════════════════════════════════════
+let micMuted = false;
+
+function toggleMic() {
+  if (!avatarInstance || !sessionActive) return;
+  micMuted = !micMuted;
+  try {
+    if (micMuted) {
+      avatarInstance.stopListening();
+      document.getElementById('btn-mic').textContent = '🔇 Unmute';
+      document.getElementById('mic-label').textContent = '🔇 Microphone muted';
+    } else {
+      avatarInstance.startListening();
+      document.getElementById('btn-mic').textContent = '🎙 Mute';
+      document.getElementById('mic-label').textContent = '🎤 Speak to the assistant';
+    }
+  } catch (e) { console.warn('[Mic]', e.message); }
+}
+
+// ══════════════════════════════════════════════════════════
+//  CONTROLS
+// ══════════════════════════════════════════════════════════
+document.getElementById('btn-interrupt').addEventListener('click', () => {
+  interruptAvatar();
+});
+
+document.getElementById('btn-end').addEventListener('click', async () => {
+  if (avatarInstance) {
+    try { await avatarInstance.stop(); } catch (e) {}
+  }
+  addMsg('ai', 'Session ended. Goodbye!');
+  setState('Ended', 'error');
+  sessionChip.textContent = 'Ended';
+  sessionActive = false;
+  overlay.classList.remove('hidden');
+  setOverlay('Session ended');
+});
+
+// ══════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════
+// Clean up session on page close/refresh — prevents concurrency limit buildup
+// Store session_id so we can stop it server-side on page close
+let activeSessionId = null;
+
+window.addEventListener('beforeunload', () => {
+  if (activeSessionId) {
+    // sendBeacon survives page unload — fetch() does not
+    navigator.sendBeacon(
+      '/api/stop-session',
+      JSON.stringify({ session_id: activeSessionId })
+    );
+  }
+  if (avatarInstance && sessionActive) {
+    try { avatarInstance.stop(); } catch (e) {}
+  }
+});
+
+function handleStart() {
+  // User gesture — AudioContext now allowed
+  document.getElementById('start-btn').classList.add('hidden');
+  document.getElementById('loader-ring').style.display = 'block';
+  initAvatar();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Don't auto-init — wait for user click (browser AudioContext policy)
+  document.getElementById('loader-ring').style.display = 'none';
+
+  // voiceChat handled by LiveAvatar SDK — no widget needed
+});
+</script>
+</body>
+</html>
