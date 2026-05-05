@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Digital Twin — Access</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=DM+Mono&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #f0f2f7;
+      --surface: #ffffff;
+      --border:  #dde1ea;
+      --accent:  #3b6ef8;
+      --accent2: #6c47ff;
+      --text:    #18213a;
+      --sub:     #6b7a99;
+      --green:   #22c55e;
+      --amber:   #f59e0b;
+      --sans:    'DM Sans', sans-serif;
+      --mono:    'DM Mono', monospace;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 70% 60% at 15% 15%, rgba(59,110,248,.10) 0%, transparent 65%),
+        radial-gradient(ellipse 60% 70% at 85% 85%, rgba(108,71,255,.08) 0%, transparent 65%);
+      pointer-events: none; z-index: 0;
+    }
+
+    .page {
+      position: relative; z-index: 1;
+      height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px 52px;
+      width: 430px;
+      box-shadow: 0 8px 40px rgba(30,40,90,.10), 0 1px 3px rgba(30,40,90,.06);
+      animation: fadeUp .45s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 36px;
+    }
+
+    .brand-icon {
+      width: 40px; height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+    }
+
+    .brand-label { font-size: .95rem; font-weight: 600; color: var(--text); }
+    .brand-sub   { font-size: .72rem; color: var(--sub); margin-top: 1px; }
+
+    h1 {
+      font-size: 1.55rem; font-weight: 600;
+      letter-spacing: -.03em; color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .subtitle { font-size: .85rem; color: var(--sub); margin-bottom: 32px; }
+
+    label {
+      display: block; font-size: .78rem; font-weight: 500;
+      color: var(--sub); margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 11px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-family: var(--sans); font-size: .93rem;
+      outline: none;
+      transition: border-color .18s, box-shadow .18s, background .18s;
+      margin-bottom: 16px;
+    }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(59,110,248,.10);
+      background: #fff;
+    }
+    input::placeholder { color: #b8c0d0; }
+
+    button {
+      width: 100%;
+      background: linear-gradient(130deg, var(--accent) 0%, var(--accent2) 100%);
+      border: none; border-radius: 11px;
+      color: #fff; font-family: var(--sans);
+      font-size: .93rem; font-weight: 600;
+      padding: 13px; cursor: pointer;
+      letter-spacing: -.01em;
+      transition: opacity .18s, transform .15s, box-shadow .18s;
+      box-shadow: 0 3px 14px rgba(59,110,248,.30);
+    }
+    button:hover  { opacity: .92; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,110,248,.35); }
+    button:active { transform: translateY(0); }
+
+    .status-row {
+      display: flex; gap: 20px;
+      margin-top: 28px; padding-top: 22px;
+      border-top: 1px solid var(--border);
+    }
+
+    .status-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: .73rem; color: var(--sub); font-weight: 500;
+    }
+
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2.4s ease infinite;
+    }
+    .dot.amber { background: var(--amber); animation-delay: .6s; }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse  { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+
+      <div class="brand">
+        <div class="brand-icon">🤖</div>
+        <div>
+          <div class="brand-label">AI Assistant</div>
+          <div class="brand-sub">Powered by your Digital Twin</div>
+        </div>
+      </div>
+
+      <h1>Welcome</h1>
+      <p class="subtitle">Enter your name to begin your session.</p>
+
+      <form action="/demo" method="post">
+        <label for="user_name">Your Name</label>
+        <input type="text" id="user_name" name="user_name" placeholder="e.g. Sarah" autocomplete="off" required/>
+        <button type="submit">Start Session →</button>
+      </form>
+
+      <div class="status-row">
+        <div class="status-item"><span class="dot"></span>Voice Active</div>
+        <div class="status-item"><span class="dot amber"></span>Avatar Ready</div>
+        <div class="status-item"><span class="dot"></span>Secure</div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
