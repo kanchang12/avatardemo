@@ -1,0 +1,14 @@
+{
+  "name": "digital-twin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "esbuild sdk-entry.js --bundle --format=iife --global-name=LiveAvatarSDK --outfile=static/avatar-sdk.js --platform=browser"
+  },
+  "dependencies": {
+    "@heygen/liveavatar-web-sdk": "latest"
+  },
+  "devDependencies": {
+    "esbuild": "latest"
+  }
+}
