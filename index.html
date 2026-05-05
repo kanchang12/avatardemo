@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Second Stitch | Legacy Interface</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --accent-color: #7d8cc4;
+            --text-main: #ffffff;
+            --text-dim: #555555;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            letter-spacing: 0.5rem;
+            text-transform: uppercase;
+            font-weight: 200;
+            margin: 0;
+        }
+
+        /* Pulse Animation */
+        .pulse-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin-bottom: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .pulse-core {
+            width: 12px;
+            height: 12px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            z-index: 5;
+            box-shadow: 0 0 20px var(--accent-color);
+        }
+
+        .pulse-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 1px solid var(--accent-color);
+            border-radius: 50%;
+            opacity: 0;
+            animation: ring-expand 4s cubic-bezier(0.2, 0.4, 0.4, 1) infinite;
+        }
+
+        .pulse-ring:nth-child(2) { animation-delay: 1.3s; }
+        .pulse-ring:nth-child(3) { animation-delay: 2.6s; }
+
+        @keyframes ring-expand {
+            0% { transform: scale(0.1); opacity: 0; }
+            50% { opacity: 0.4; }
+            100% { transform: scale(1.4); opacity: 0; }
+        }
+
+        /* Custom Start Button */
+        #start-btn {
+            background: transparent;
+            border: 1px solid var(--accent-color);
+            color: var(--text-main);
+            padding: 15px 40px;
+            font-size: 0.8rem;
+            letter-spacing: 0.3rem;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            outline: none;
+            z-index: 10;
+        }
+
+        #start-btn:hover {
+            background: var(--accent-color);
+            color: #000;
+            box-shadow: 0 0 30px var(--accent-color);
+        }
+
+        #status-text {
+            margin-top: 20px;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            letter-spacing: 0.1rem;
+            height: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>The Second Stitch</h1>
+    </div>
+
+    <div class="pulse-container">
+        <div class="pulse-core"></div>
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+        <div class="pulse-ring"></div>
+    </div>
+
+    <button id="start-btn">Initiate Interview</button>
+    <div id="status-text"></div>
+
+    <!-- ElevenLabs Conversational AI SDK -->
+    <script src="https://elevenlabs.io/convai-widget/index.js" async type="text/javascript"></script>
+
+    <script>
+        const agentId = 'agent_1101kqwbfdywf85tybrpvnypx7xk';
+        const startBtn = document.getElementById('start-btn');
+        const statusText = document.getElementById('status-text');
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                statusText.innerText = "CONNECTING...";
+                
+                // Using the ElevenLabs SDK to start a conversation manually
+                // This targets the specific agent ID without the floating widget UI
+                const conversation = await window.ElevenLabsConvAI.startSession({
+                    agentId: agentId,
+                    onConnect: () => {
+                        statusText.innerText = "SESSION ACTIVE";
+                        startBtn.style.display = 'none';
+                    },
+                    onDisconnect: () => {
+                        statusText.innerText = "SESSION ENDED";
+                        startBtn.style.display = 'block';
+                    },
+                    onError: (error) => {
+                        console.error(error);
+                        statusText.innerText = "ERROR CONNECTING";
+                    }
+                });
+            } catch (error) {
+                console.error("Failed to start session:", error);
+                statusText.innerText = "FAILED TO INITIALIZE";
+            }
+        });
+    </script>
+
+</body>
+</html>
