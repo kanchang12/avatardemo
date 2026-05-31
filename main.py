@@ -13,7 +13,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
-NGROK_URL = os.getenv("NGROK_URL")  # e.g. https://mekhi-chainlike-favouredly.ngrok-free.dev
+NGROK_URL = os.getenv("NGROK_URL")
 AVATAR_IMAGE = os.getenv("AVATAR_IMAGE", "static/avatar.jpg")
 
 
@@ -44,17 +44,17 @@ async def lipsync(payload: dict):
     with open("/tmp/agent_audio.wav", "wb") as f:
         f.write(audio_bytes)
 
-    musetalk_url = f"{NGROK_URL}/talker_response"
+    musetalk_url = f"{NGROK_URL}/talker_response/"
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         with open("/tmp/agent_audio.wav", "rb") as af, open(AVATAR_IMAGE, "rb") as imgf:
             response = await client.post(
                 musetalk_url,
                 files={
-                    "audio": ("audio.wav", af, "audio/wav"),
-                    "image": ("avatar.jpg", imgf, "image/jpeg"),
+                    "source_image": ("avatar.jpg", imgf, "image/jpeg"),
+                    "driven_audio": ("audio.wav", af, "audio/wav"),
                 },
-                data={"talker": "MuseTalk"}
+                data={"talker_method": "SadTalker"}
             )
 
     if response.status_code == 200:
