@@ -1,4 +1,6 @@
-flask
-requests
+fastapi
+uvicorn
+httpx
+python-multipart
 python-dotenv
 gunicorn
