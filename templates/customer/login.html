@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Petar — Login</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.box{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:20px;padding:48px;width:380px}
+h1{color:#a78bfa;font-size:1.5rem;margin-bottom:6px;letter-spacing:2px}
+p{color:#888;font-size:0.88rem;margin-bottom:30px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:0.82rem;color:#888;margin-bottom:5px}
+.field input{width:100%;padding:11px 14px;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:9px;color:#fff;font-size:0.92rem}
+.field input:focus{outline:none;border-color:#a78bfa}
+.btn{width:100%;padding:13px;background:#a78bfa;color:#fff;border:none;border-radius:9px;font-size:0.95rem;cursor:pointer;margin-top:6px;transition:background 0.2s}
+.btn:hover{background:#7c3aed}
+.err{color:#ef4444;font-size:0.82rem;margin-top:10px;display:none}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>TRIONE</h1>
+  <p>Customer portal — manage your avatar</p>
+  <div class="field"><label>Email</label><input type="email" id="email" placeholder="you@example.com"></div>
+  <div class="field"><label>Password</label><input type="password" id="pw" placeholder="••••••••"></div>
+  <button class="btn" onclick="login()">Sign in</button>
+  <p class="err" id="err">Invalid credentials. Please try again.</p>
+</div>
+<script>
+async function login() {
+  const r=await fetch('/customer/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('pw').value})});
+  if(r.ok){window.location='/customer/';}
+  else{document.getElementById('err').style.display='block';}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+</script>
+</body>
+</html>

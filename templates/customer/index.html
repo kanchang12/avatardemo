@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Avatar — TRIONE</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;flex-direction:column}
+nav{display:flex;align-items:center;gap:14px;padding:13px 26px;border-bottom:1px solid #1e1e2e;flex-shrink:0}
+nav h1{color:#a78bfa;font-size:1.05rem;letter-spacing:2px;flex:1}
+.pill{font-size:0.78rem;color:#888;padding:4px 12px;border:1px solid #1e1e2e;border-radius:16px}
+nav a{color:#888;font-size:0.8rem;text-decoration:none;padding:5px 14px;border:1px solid #2e2e4e;border-radius:14px}
+nav a:hover{border-color:#a78bfa;color:#a78bfa}
+.layout{display:flex;flex:1;overflow:hidden;height:calc(100vh - 50px)}
+.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center}
+.vpanel iframe{width:100%;height:100%;border:none}
+.loading{color:#555}
+.side{width:400px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column;overflow:hidden}
+.voice-section{padding:14px 16px;border-bottom:1px solid #1e1e2e;flex-shrink:0}
+.voice-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.edot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0}
+.estatus{font-size:0.8rem;color:#888;flex:1}
+.vbtns{display:flex;gap:8px}
+.vbtn{flex:1;padding:9px;border:none;border-radius:9px;cursor:pointer;font-size:0.82rem;transition:all 0.2s}
+.vbtn.start{background:#a78bfa;color:#fff}
+.vbtn.stop{background:#ef4444;color:#fff}
+.vbtn:disabled{background:#1e1e2e;color:#555;cursor:not-allowed}
+.tabs{display:flex;border-bottom:1px solid #1e1e2e;flex-shrink:0}
+.tab{flex:1;padding:11px;text-align:center;cursor:pointer;color:#888;font-size:0.78rem;border-bottom:2px solid transparent;transition:all 0.2s}
+.tab.active{color:#a78bfa;border-bottom-color:#a78bfa}
+.tab-content{display:none;flex:1;overflow-y:auto;padding:13px;flex-direction:column;gap:8px}
+.tab-content.active{display:flex}
+.chunk{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:9px;padding:11px;position:relative}
+.chunk .cat{font-size:0.68rem;text-transform:uppercase;margin-bottom:3px;letter-spacing:1px}
+.chunk .cat.ego{color:#f59e0b}
+.chunk .cat.raw{color:#a78bfa}
+.chunk .text{font-size:0.82rem;color:#ccc;line-height:1.5}
+.chunk .del{position:absolute;top:9px;right:9px;background:transparent;border:none;color:#555;cursor:pointer;font-size:0.78rem}
+.chunk .del:hover{color:#ef4444}
+.ego-section{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:11px;padding:13px;margin-bottom:8px}
+.ego-section h4{font-size:0.78rem;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.ego-section ul{list-style:none;display:flex;flex-direction:column;gap:4px}
+.ego-section ul li{font-size:0.8rem;color:#ccc;line-height:1.4;padding-left:12px;position:relative}
+.ego-section ul li:before{content:"•";position:absolute;left:0;color:#f59e0b}
+.ego-rel{font-size:0.78rem;color:#ccc;margin-bottom:4px}
+.ego-rel strong{color:#a78bfa}
+.persona-box{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:11px;padding:13px;font-size:0.83rem;color:#ccc;line-height:1.6;margin-bottom:8px}
+.sitem{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:9px;padding:11px;display:flex;justify-content:space-between;align-items:center}
+.stype{font-size:0.73rem;color:#888;margin-bottom:2px}
+.sdate{font-size:0.7rem;color:#555}
+.scount{font-size:0.82rem;color:#a78bfa}
+.empty{color:#555;font-size:0.82rem;text-align:center;padding:24px 12px;line-height:1.6}
+.train-area{flex-shrink:0;padding:12px 14px;border-top:1px solid #1e1e2e;display:flex;gap:8px}
+.train-area textarea{flex:1;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:9px;color:#fff;padding:9px;font-size:0.82rem;resize:none;height:54px;font-family:inherit}
+.train-area textarea:focus{outline:none;border-color:#a78bfa}
+.train-area button{background:#a78bfa;color:#fff;border:none;border-radius:9px;padding:0 14px;cursor:pointer;font-size:0.82rem}
+.toast{position:fixed;bottom:22px;right:22px;background:#4ade80;color:#000;padding:9px 18px;border-radius:9px;font-size:0.82rem;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:999}
+.toast.show{opacity:1}
+.stat-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.stat-chip{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:8px;padding:8px 12px;text-align:center;flex:1}
+.stat-chip .n{font-size:1.4rem;color:#a78bfa;font-weight:700}
+.stat-chip .l{font-size:0.68rem;color:#555;margin-top:2px}
+</style>
+</head>
+<body>
+<nav>
+  <h1>TRIONE — My Avatar</h1>
+  <div class="pill" id="kCount">Loading...</div>
+  <a href="/customer/logout">Sign out</a>
+</nav>
+<div class="layout">
+  <div class="vpanel" id="vpanel"><p class="loading">Connecting to your avatar...</p></div>
+  <div class="side">
+    <div class="voice-section">
+      <div class="voice-row">
+        <div class="edot" id="eDot"></div>
+        <span class="estatus" id="eStatus">Not connected</span>
+      </div>
+      <div class="vbtns">
+        <button class="vbtn start" id="startBtn" onclick="startVoice()">🎤 Start talking</button>
+        <button class="vbtn stop" id="stopBtn" onclick="stopVoice()" disabled>⬛ Stop</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('ego',this)">EGO</div>
+      <div class="tab" onclick="switchTab('knowledge',this)">Knowledge</div>
+      <div class="tab" onclick="switchTab('sessions',this)">Sessions</div>
+    </div>
+    <div class="tab-content active" id="tab-ego"></div>
+    <div class="tab-content" id="tab-knowledge"></div>
+    <div class="tab-content" id="tab-sessions"></div>
+    <div class="train-area">
+      <textarea id="trainText" placeholder="Type to add knowledge manually..."></textarea>
+      <button onclick="trainManual()">Add</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let sessionId=null, customerId=null;
+let elWs=null, micStream=null, audioCtx=null, processor=null;
+let playCtx=null, playQueue=[], playBusy=false;
+
+async function init() {
+  const r=await fetch('/customer/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const d=await r.json();
+  if(d.error){document.getElementById('vpanel').innerHTML=`<p style="color:#ef4444;padding:20px">${d.error}</p>`;return;}
+  sessionId=d.session_id; customerId=d.customer_id;
+  document.getElementById('kCount').textContent=d.knowledge_count+' chunks';
+  const iframe=document.createElement('iframe');
+  iframe.src=d.embed_url; iframe.allow='microphone; camera';
+  iframe.style.cssText='width:100%;height:100%;border:none';
+  document.getElementById('vpanel').innerHTML='';
+  document.getElementById('vpanel').appendChild(iframe);
+  renderEgo(d.ego_model, d.persona);
+  loadKnowledge();
+  loadSessions();
+}
+
+// ── Voice ─────────────────────────────────────────────────────────────────────
+async function startVoice() {
+  document.getElementById('startBtn').disabled=true;
+  setEL('Connecting...','#f59e0b');
+  try {
+    const sr=await fetch('/el/signed_url'+(customerId?'?customer_id='+customerId:''));
+    const sd=await sr.json();
+    if(!sd.signed_url){setEL('Auth error','#ef4444');document.getElementById('startBtn').disabled=false;return;}
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{sampleRate:16000,channelCount:1}});
+    audioCtx=new AudioContext({sampleRate:16000});
+    const src=audioCtx.createMediaStreamSource(micStream);
+    processor=audioCtx.createScriptProcessor(4096,1,1);
+    elWs=new WebSocket(sd.signed_url);
+    elWs.onopen=()=>{
+      setEL('Listening — everything you say teaches your avatar','#4ade80');
+      document.getElementById('startBtn').disabled=true;
+      document.getElementById('stopBtn').disabled=false;
+      processor.onaudioprocess=e=>{
+        if(elWs.readyState!==WebSocket.OPEN)return;
+        const f32=e.inputBuffer.getChannelData(0);
+        const i16=new Int16Array(f32.length);
+        for(let i=0;i<f32.length;i++)i16[i]=Math.max(-32768,Math.min(32767,f32[i]*32768));
+        elWs.send(JSON.stringify({user_audio_chunk:btoa(String.fromCharCode(...new Uint8Array(i16.buffer)))}));
+      };
+      src.connect(processor); processor.connect(audioCtx.destination);
+    };
+    elWs.onmessage=ev=>{
+      if(typeof ev.data!=='string')return;
+      const msg=JSON.parse(ev.data);
+      if(msg.type==='audio'&&msg.audio_event?.audio_base_64){
+        setEL('Avatar speaking...','#f59e0b');
+        playPCM(msg.audio_event.audio_base_64,16000);
+      }
+      if(msg.type==='transcript'&&msg.transcript_event){
+        const t=msg.transcript_event;
+        // When Petar speaks — train the EGO
+        if(t.speaker==='user'&&t.text&&sessionId){
+          trainText(t.text);
+        }
+        if(['agent_response_correction'].includes(msg.type))setEL('Listening — everything you say teaches your avatar','#4ade80');
+      }
+      if(msg.type==='interruption'){playQueue=[];playBusy=false;}
+    };
+    elWs.onerror=()=>setEL('Connection error','#ef4444');
+    elWs.onclose=()=>{setEL('Disconnected','#333');stopVoice();};
+  } catch(e){setEL('Error: '+e.message,'#ef4444');document.getElementById('startBtn').disabled=false;}
+}
+
+function stopVoice(){
+  if(elWs){elWs.close();elWs=null;}
+  if(processor){processor.disconnect();processor=null;}
+  if(audioCtx){audioCtx.close();audioCtx=null;}
+  if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
+  playQueue=[];playBusy=false;
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('stopBtn').disabled=true;
+  setEL('Disconnected','#333');
+}
+
+function playPCM(b64,sr){playQueue.push({b64,sr});if(!playBusy)drainPlay();}
+function drainPlay(){
+  if(!playQueue.length){playBusy=false;setEL('Listening — everything you say teaches your avatar','#4ade80');return;}
+  playBusy=true;
+  const{b64,sr}=playQueue.shift();
+  if(!playCtx||playCtx.state==='closed')playCtx=new AudioContext({sampleRate:sr});
+  const raw=atob(b64),u8=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)u8[i]=raw.charCodeAt(i);
+  const pcm=new Int16Array(u8.buffer);
+  const buf=playCtx.createBuffer(1,pcm.length,sr);
+  const ch=buf.getChannelData(0);
+  for(let i=0;i<pcm.length;i++)ch[i]=pcm[i]/32768;
+  const s=playCtx.createBufferSource();
+  s.buffer=buf;s.connect(playCtx.destination);s.onended=drainPlay;s.start();
+}
+
+// ── EGO Training ──────────────────────────────────────────────────────────────
+async function trainText(text){
+  if(!text.trim()||!sessionId)return;
+  const r=await fetch('/customer/train',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text,session_id:sessionId,context:'voice conversation with own avatar'})
+  });
+  const d=await r.json();
+  if(d.chunks_added>0||d.beliefs_extracted>0){
+    showToast(`EGO updated: +${d.chunks_added} chunks, +${d.beliefs_extracted} beliefs`);
+    setTimeout(()=>{loadEgo();loadKnowledge();},2500);
+  }
+}
+
+async function trainManual(){
+  const text=document.getElementById('trainText').value.trim();
+  if(!text)return;
+  document.getElementById('trainText').value='';
+  await trainText(text);
+}
+
+// ── EGO Display ───────────────────────────────────────────────────────────────
+async function loadEgo(){
+  const r=await fetch('/customer/ego');
+  const d=await r.json();
+  renderEgo(d.ego, d.summary);
+}
+
+function renderEgo(ego, persona){
+  const el=document.getElementById('tab-ego');
+  if(!ego&&!persona){
+    el.innerHTML='<p class="empty">Your EGO model will be built here as you talk to your avatar.<br><br>Every conversation teaches it who you are — your beliefs, values, how you think, how you relate to others.</p>';
+    return;
+  }
+  let html='';
+  if(persona){
+    html+=`<div class="persona-box">${persona}</div>`;
+  }
+  // Stats row
+  const bCount=(ego?.beliefs||[]).length;
+  const vCount=(ego?.values||[]).length;
+  const rCount=Object.keys(ego?.relationships||{}).length;
+  const pCount=(ego?.reasoning_patterns||[]).length;
+  html+=`<div class="stat-row">
+    <div class="stat-chip"><div class="n">${bCount}</div><div class="l">Beliefs</div></div>
+    <div class="stat-chip"><div class="n">${vCount}</div><div class="l">Values</div></div>
+    <div class="stat-chip"><div class="n">${rCount}</div><div class="l">Relationships</div></div>
+    <div class="stat-chip"><div class="n">${pCount}</div><div class="l">Patterns</div></div>
+  </div>`;
+  if(ego?.beliefs?.length){
+    html+=`<div class="ego-section"><h4>Core Beliefs</h4><ul>${ego.beliefs.slice(0,8).map(b=>`<li>${b}</li>`).join('')}</ul></div>`;
+  }
+  if(ego?.values?.length){
+    html+=`<div class="ego-section"><h4>Values</h4><ul>${ego.values.slice(0,6).map(v=>`<li>${v}</li>`).join('')}</ul></div>`;
+  }
+  if(ego?.reasoning_patterns?.length){
+    html+=`<div class="ego-section"><h4>How They Think</h4><ul>${ego.reasoning_patterns.slice(0,5).map(p=>`<li>${p}</li>`).join('')}</ul></div>`;
+  }
+  if(ego?.relationships&&Object.keys(ego.relationships).length){
+    const rels=Object.entries(ego.relationships).slice(0,8);
+    html+=`<div class="ego-section"><h4>Relationships</h4>${rels.map(([p,d])=>`<div class="ego-rel"><strong>${p}:</strong> ${d}</div>`).join('')}</div>`;
+  }
+  if(ego?.contradictions?.length){
+    html+=`<div class="ego-section"><h4>Growth & Contradictions</h4><ul>${ego.contradictions.slice(0,4).map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
+  }
+  el.innerHTML=html;
+}
+
+// ── Knowledge ─────────────────────────────────────────────────────────────────
+async function loadKnowledge(){
+  const r=await fetch('/customer/knowledge');
+  const chunks=await r.json();
+  document.getElementById('kCount').textContent=chunks.length+' chunks';
+  const el=document.getElementById('tab-knowledge');
+  if(!chunks.length){el.innerHTML='<p class="empty">Knowledge chunks will appear here as you talk.</p>';return;}
+  el.innerHTML=chunks.map(c=>`
+    <div class="chunk">
+      <div class="cat ${c.ego_layer==='ego'?'ego':'raw'}">${c.ego_layer==='ego'?'⚡ EGO':'📝 RAW'} · ${c.category}</div>
+      <div class="text">${c.chunk}</div>
+      <button class="del" onclick="delChunk(${c.id},this)">✕</button>
+    </div>`).join('');
+}
+
+async function delChunk(id,btn){
+  await fetch(`/customer/knowledge/${id}`,{method:'DELETE'});
+  btn.closest('.chunk').remove();
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+async function loadSessions(){
+  const r=await fetch('/customer/sessions');
+  const sessions=await r.json();
+  const el=document.getElementById('tab-sessions');
+  if(!sessions.length){el.innerHTML='<p class="empty">No sessions yet.</p>';return;}
+  el.innerHTML=sessions.map(s=>`
+    <div class="sitem">
+      <div>
+        <div class="stype">${s.session_type==='customer_training'?'🎓 Training':'💬 User chat'}</div>
+        <div class="sdate">${s.started_at?s.started_at.slice(0,16):''}</div>
+      </div>
+      <div class="scount">${s.message_count} msgs</div>
+    </div>`).join('');
+}
+
+function switchTab(name,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='ego')loadEgo();
+}
+
+function setEL(text,color){
+  document.getElementById('eStatus').textContent=text;
+  document.getElementById('eDot').style.background=color;
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+setInterval(()=>{if(sessionId)loadKnowledge();},30000);
+init();
+</script>
+</body>
+</html>

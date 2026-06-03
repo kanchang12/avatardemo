@@ -1,9 +1,18 @@
 flask
+<<<<<<< HEAD
 requests
 python-dotenv
 flask-cors
+=======
+flask-cors
+requests
+python-dotenv
+>>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
 gunicorn
 numpy
 opencv-python-headless
 face-recognition
+<<<<<<< HEAD
 face-recognition-models @ https://github.com/ageitgey/face_recognition_models/archive/master.zip
+=======
+>>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)

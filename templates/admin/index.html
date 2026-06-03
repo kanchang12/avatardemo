@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRIONE Admin</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh}
+nav{display:flex;align-items:center;padding:14px 28px;border-bottom:1px solid #1e1e2e;gap:20px}
+nav h1{color:#a78bfa;font-size:1.1rem;letter-spacing:2px;flex:1}
+nav a{color:#888;text-decoration:none;font-size:0.8rem;padding:6px 14px;border:1px solid #2e2e4e;border-radius:14px}
+nav a:hover{border-color:#a78bfa;color:#a78bfa}
+.content{padding:28px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:28px}
+.stat{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:13px;padding:18px;text-align:center}
+.stat .num{font-size:2rem;color:#a78bfa;font-weight:700}
+.stat .label{color:#888;font-size:0.76rem;margin-top:3px}
+h2{font-size:1rem;margin-bottom:14px;color:#ccc}
+.addbtn{background:#a78bfa;color:#fff;border:none;padding:9px 20px;border-radius:9px;cursor:pointer;font-size:0.85rem;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;margin-bottom:28px}
+th{text-align:left;padding:9px 12px;font-size:0.78rem;color:#888;border-bottom:1px solid #1e1e2e}
+td{padding:9px 12px;font-size:0.83rem;border-bottom:1px solid #0f0f1a}
+.badge{padding:3px 9px;border-radius:9px;font-size:0.73rem}
+.badge.on{background:#4ade8022;color:#4ade80}
+.badge.off{background:#ef444422;color:#ef4444}
+.tbtn{background:transparent;border:1px solid #2e2e4e;color:#888;padding:4px 10px;border-radius:7px;cursor:pointer;font-size:0.76rem}
+.modal{display:none;position:fixed;inset:0;background:#000d;z-index:100;align-items:center;justify-content:center}
+.modal.show{display:flex}
+.mbox{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:18px;padding:32px;width:440px;max-width:95vw}
+.mbox h3{margin-bottom:18px;font-size:1rem}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:0.78rem;color:#888;margin-bottom:4px}
+.field input{width:100%;padding:9px 12px;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:8px;color:#fff;font-size:0.85rem}
+.mbtns{display:flex;gap:9px;margin-top:18px}
+.msave{flex:1;padding:11px;background:#a78bfa;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem}
+.mcancel{padding:11px 18px;background:transparent;border:1px solid #2e2e4e;color:#888;border-radius:8px;cursor:pointer}
+</style>
+</head>
+<body>
+<nav>
+  <h1>TRIONE Admin</h1>
+  <a href="/" target="_blank">User portal</a>
+  <a href="/admin/logout">Sign out</a>
+</nav>
+<div class="content">
+  <div class="stats" id="stats"></div>
+  <h2>Customers</h2>
+  <button class="addbtn" onclick="document.getElementById('modal').classList.add('show')">+ Add Customer</button>
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Created</th><th></th></tr></thead>
+    <tbody id="ctable"></tbody>
+  </table>
+</div>
+
+<div class="modal" id="modal">
+  <div class="mbox">
+    <h3>Add Customer</h3>
+    <div class="field"><label>Name</label><input id="cName" placeholder="Petar"></div>
+    <div class="field"><label>Email</label><input id="cEmail" placeholder="petar@example.com"></div>
+    <div class="field"><label>Password</label><input type="password" id="cPw"></div>
+    <div class="field"><label>LiveAvatar Avatar ID</label><input id="cAvatar"></div>
+    <div class="field"><label>LiveAvatar Context ID</label><input id="cContext"></div>
+    <div class="field"><label>ElevenLabs Agent ID</label><input id="cAgent"></div>
+    <div class="mbtns">
+      <button class="msave" onclick="addCustomer()">Create</button>
+      <button class="mcancel" onclick="document.getElementById('modal').classList.remove('show')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function loadStats(){
+  const r=await fetch('/admin/stats');const d=await r.json();
+  document.getElementById('stats').innerHTML=[
+    ['Customers',d.total_customers],['Users',d.total_users],
+    ['Sessions',d.total_sessions],['Messages',d.total_messages],
+    ['Knowledge',d.total_knowledge_chunks]
+  ].map(([l,n])=>`<div class="stat"><div class="num">${n}</div><div class="label">${l}</div></div>`).join('');
+}
+async function loadCustomers(){
+  const r=await fetch('/admin/customers');const cs=await r.json();
+  document.getElementById('ctable').innerHTML=cs.map(c=>`
+    <tr><td>${c.name}</td><td>${c.email}</td>
+    <td><span class="badge ${c.active?'on':'off'}">${c.active?'Active':'Inactive'}</span></td>
+    <td>${c.created_at?c.created_at.slice(0,10):'-'}</td>
+    <td><button class="tbtn" onclick="toggle('${c.id}')">${c.active?'Disable':'Enable'}</button></td></tr>`).join('');
+}
+async function toggle(id){await fetch('/admin/toggle_customer/'+id,{method:'POST'});loadCustomers();loadStats();}
+async function addCustomer(){
+  const r=await fetch('/admin/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    name:document.getElementById('cName').value,email:document.getElementById('cEmail').value,
+    password:document.getElementById('cPw').value,avatar_id:document.getElementById('cAvatar').value,
+    context_id:document.getElementById('cContext').value,elevenlabs_agent_id:document.getElementById('cAgent').value
+  })});
+  if(r.ok){document.getElementById('modal').classList.remove('show');loadCustomers();loadStats();}
+}
+loadStats();loadCustomers();
+setInterval(()=>{loadStats();loadCustomers();},30000);
+</script>
+</body>
+</html>
