@@ -793,18 +793,11 @@ def admin_create_customer():
     db = get_db()
     cid = str(uuid.uuid4())
     db.execute(
-        "INSERT INTO customers (id, name, email, password_hash, avatar_id, context_id, elevenlabs_agent_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO customers (id, name, email, password_hash, avatar_id, context_id, elevenlabs_agent_id, elevenlabs_secret_id, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
         (cid, data["name"], data["email"], hash_pw(data["password"]),
          data.get("avatar_id"), data.get("context_id"),
-         data.get("elevenlabs_agent_id"), datetime.utcnow().isoformat())
-    # Store elevenlabs_secret_id if provided
-    if data.get("elevenlabs_secret_id"):
-        db.execute("UPDATE customers SET elevenlabs_secret_id=? WHERE id=?",
-                   (data["elevenlabs_secret_id"], cid))
-    db.commit()
-    return jsonify({"ok": True, "id": cid})
-
-def _admin_create_customer_placeholder(): pass  # marker
+         data.get("elevenlabs_agent_id"), data.get("elevenlabs_secret_id"),
+         datetime.utcnow().isoformat())
     )
     db.commit()
     return jsonify({"ok": True, "id": cid})
