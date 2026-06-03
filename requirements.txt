@@ -6,4 +6,4 @@ gunicorn
 numpy
 opencv-python-headless
 face-recognition
-face-recognition-models @ https://github.com/ageitgey/face_recognition_models/archive/master.zip)
+face-recognition-models @ https://github.com/ageitgey/face_recognition_models/archive/master.zip
