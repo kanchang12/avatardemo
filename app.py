@@ -911,5 +911,18 @@ def avatar_thumbnail():
         return send_file(local, mimetype="image/jpeg")
     return jsonify({"error": "No image"}), 404
 
+@app.route("/admin/seed_petar")
+def seed_petar():
+    db = get_db()
+    db.execute(
+        """UPDATE customers SET 
+            elevenlabs_agent_id = 'agent_0801kt6qnwadf8xbf4y5hc5ct81s',
+            avatar_id = '0930fd59-c8ad-434d-ad53-b391a1768720'
+        WHERE email = 'petar@example.com'"""
+    )
+    db.commit()
+    c = db.execute("SELECT id, name, email, avatar_id, elevenlabs_agent_id FROM customers WHERE email='petar@example.com'").fetchone()
+    return jsonify(dict(c))
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
