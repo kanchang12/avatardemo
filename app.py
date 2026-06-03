@@ -405,7 +405,7 @@ def find_face(db, enc, tolerance=0.5):
 def user_home():
     return render_template("user/index.html")
 
-@app.route("/u/identify", methods=["POST", "GET"])
+@app.route("/u/identify", methods=["GET", "POST"])
 def user_identify():
     data = request.json or {}
     b64 = data.get("image")
@@ -444,7 +444,7 @@ def user_identify():
         "history": [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(history)]
     })
 
-@app.route("/u/session", methods=["POST", "GET"])
+@app.route("/u/session", methods=["GET", "POST"])
 def user_session():
     data = request.json or {}
     user_id = data.get("user_id", str(uuid.uuid4()))
@@ -495,7 +495,7 @@ def user_session():
             "persona": customer["persona_summary"] or ""
         })
 
-@app.route("/u/message", methods=["POST", "GET"])
+@app.route("/u/message", methods=["GET", "POST"])
 def user_message():
     data = request.json or {}
     db = get_db()
@@ -514,7 +514,7 @@ def user_message():
 @app.route("/customer/login", methods=["GET", "POST"])
 def customer_login():
     if request.method == "POST":
-        data = request.json or {}
+        data = request.get_json(silent=True) or request.form.to_dict() or {}
         db = get_db()
         c = db.execute(
             "SELECT * FROM customers WHERE email=? AND password_hash=?",
@@ -537,7 +537,7 @@ def customer_home():
         return redirect(url_for("customer_login"))
     return render_template("customer/index.html")
 
-@app.route("/customer/session", methods=["POST", "GET"])
+@app.route("/customer/session", methods=["GET", "POST"])
 def customer_session():
     if "customer_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
@@ -595,7 +595,7 @@ def customer_session():
             "ego_model": ego_model
         })
 
-@app.route("/customer/train", methods=["POST", "GET"])
+@app.route("/customer/train", methods=["GET", "POST"])
 def customer_train():
     """
     Core EGO training endpoint.
@@ -752,7 +752,7 @@ def customer_me():
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
-        data = request.json or {}
+        data = request.get_json(silent=True) or request.form.to_dict() or {}
         db = get_db()
         a = db.execute(
             "SELECT * FROM admins WHERE email=? AND password_hash=?",
@@ -785,7 +785,7 @@ def admin_customers():
     ).fetchall()
     return jsonify([dict(c) for c in customers])
 
-@app.route("/admin/customers", methods=["POST", "GET"])
+@app.route("/admin/customers", methods=["GET", "POST"])
 def admin_create_customer():
     if "admin_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
@@ -802,7 +802,7 @@ def admin_create_customer():
     db.commit()
     return jsonify({"ok": True, "id": cid})
 
-@app.route("/admin/toggle_customer/<cid>", methods=["POST", "GET"])
+@app.route("/admin/toggle_customer/<cid>", methods=["GET", "POST"])
 def admin_toggle_customer(cid):
     if "admin_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
@@ -841,7 +841,7 @@ def admin_customer_ego(cid):
 
 # ── Register ElevenLabs secret with LiveAvatar ────────────────────────────────
 
-@app.route("/admin/register_elevenlabs_secret", methods=["POST", "GET"])
+@app.route("/admin/register_elevenlabs_secret", methods=["GET", "POST"])
 def register_elevenlabs_secret():
     """
     Register the ElevenLabs API key with LiveAvatar as a secret.
