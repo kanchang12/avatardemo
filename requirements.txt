@@ -4,3 +4,7 @@ httpx
 python-multipart
 python-dotenv
 gunicorn
+flask
+requests
+python-dotenv
+flask-cors
