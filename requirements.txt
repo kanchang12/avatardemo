@@ -1,10 +1,8 @@
-fastapi
-uvicorn
-httpx
-python-multipart
-python-dotenv
-gunicorn
 flask
 requests
 python-dotenv
 flask-cors
+gunicorn
+face-recognition
+numpy
+opencv-python-headless
