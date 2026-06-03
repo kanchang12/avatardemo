@@ -8,9 +8,9 @@ load_dotenv()
 app = Flask(__name__)
 
 LIVEAVATAR_API_KEY = os.getenv("LIVEAVATAR_API_KEY")
-ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
 LIVEAVATAR_AVATAR_ID = os.getenv("LIVEAVATAR_AVATAR_ID")
-LIVEAVATAR_CONTEXT_ID = os.getenv("LIVEAVATAR_CONTEXT_ID")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
 
 @app.route("/")
 def index():
@@ -18,9 +18,6 @@ def index():
 
 @app.route("/start_session", methods=["POST"])
 def start_session():
-    data = request.json or {}
-    user_name = data.get("user_name", "Guest")
-
     # Create LiveAvatar embed session
     resp = requests.post(
         "https://api.liveavatar.com/v2/embeddings",
@@ -30,7 +27,6 @@ def start_session():
         },
         json={
             "avatar_id": LIVEAVATAR_AVATAR_ID,
-            "context_id": LIVEAVATAR_CONTEXT_ID,
             "is_sandbox": True
         }
     )
@@ -40,7 +36,18 @@ def start_session():
 
     result = resp.json()
     embed_url = result["data"]["url"]
-    return jsonify({"embed_url": embed_url, "user_name": user_name})
+    return jsonify({"embed_url": embed_url})
+
+@app.route("/el/signed_url", methods=["GET"])
+def el_signed_url():
+    resp = requests.get(
+        "https://api.elevenlabs.io/v1/convai/conversation/get_signed_url",
+        headers={"xi-api-key": ELEVENLABS_API_KEY},
+        params={"agent_id": ELEVENLABS_AGENT_ID}
+    )
+    if resp.status_code != 200:
+        return jsonify({"error": resp.text}), 500
+    return jsonify(resp.json())
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
