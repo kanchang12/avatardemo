@@ -407,7 +407,7 @@ def user_home():
 
 @app.route("/u/identify", methods=["GET", "POST"])
 def user_identify():
-    data = request.json or {}
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
     b64 = data.get("image")
     db = get_db()
     user_id = str(uuid.uuid4())
@@ -446,7 +446,7 @@ def user_identify():
 
 @app.route("/u/session", methods=["GET", "POST"])
 def user_session():
-    data = request.json or {}
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
     user_id = data.get("user_id", str(uuid.uuid4()))
     db = get_db()
 
@@ -497,7 +497,7 @@ def user_session():
 
 @app.route("/u/message", methods=["GET", "POST"])
 def user_message():
-    data = request.json or {}
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
     db = get_db()
     db.execute(
         "INSERT INTO messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (?,?,?,?,?,?)",
@@ -604,7 +604,7 @@ def customer_train():
     """
     if "customer_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
-    data = request.json or {}
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
     text = data.get("text", "").strip()
     session_id = data.get("session_id")
     speaker_context = data.get("context", "general conversation")
@@ -789,7 +789,7 @@ def admin_customers():
 def admin_create_customer():
     if "admin_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
-    data = request.json or {}
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
     db = get_db()
     cid = str(uuid.uuid4())
     db.execute(
@@ -849,7 +849,7 @@ def register_elevenlabs_secret():
     """
     if "admin_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
-    data = request.json or {}
+    data = request.get_json(silent=True) or request.form.to_dict() or {}
     el_api_key = data.get("elevenlabs_api_key")
     secret_name = data.get("name", "ElevenLabs Agent Key")
     if not el_api_key:
