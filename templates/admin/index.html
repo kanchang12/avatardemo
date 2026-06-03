@@ -11,30 +11,46 @@ nav{display:flex;align-items:center;padding:14px 28px;border-bottom:1px solid #1
 nav h1{color:#a78bfa;font-size:1.1rem;letter-spacing:2px;flex:1}
 nav a{color:#888;text-decoration:none;font-size:0.8rem;padding:6px 14px;border:1px solid #2e2e4e;border-radius:14px}
 nav a:hover{border-color:#a78bfa;color:#a78bfa}
-.content{padding:28px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:28px}
-.stat{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:13px;padding:18px;text-align:center}
-.stat .num{font-size:2rem;color:#a78bfa;font-weight:700}
-.stat .label{color:#888;font-size:0.76rem;margin-top:3px}
-h2{font-size:1rem;margin-bottom:14px;color:#ccc}
-.addbtn{background:#a78bfa;color:#fff;border:none;padding:9px 20px;border-radius:9px;cursor:pointer;font-size:0.85rem;margin-bottom:14px}
-table{width:100%;border-collapse:collapse;margin-bottom:28px}
-th{text-align:left;padding:9px 12px;font-size:0.78rem;color:#888;border-bottom:1px solid #1e1e2e}
-td{padding:9px 12px;font-size:0.83rem;border-bottom:1px solid #0f0f1a}
-.badge{padding:3px 9px;border-radius:9px;font-size:0.73rem}
+.content{padding:28px;max-width:1200px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:28px}
+.stat{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:12px;padding:16px;text-align:center}
+.stat .num{font-size:1.8rem;color:#a78bfa;font-weight:700}
+.stat .label{color:#888;font-size:0.74rem;margin-top:3px}
+h2{font-size:0.95rem;margin-bottom:12px;color:#ccc;text-transform:uppercase;letter-spacing:1px}
+.section{margin-bottom:32px}
+.addbtn{background:#a78bfa;color:#fff;border:none;padding:9px 20px;border-radius:9px;cursor:pointer;font-size:0.85rem;margin-bottom:14px;margin-right:8px}
+.addbtn.secondary{background:#1e1e2e;color:#888;border:1px solid #2e2e4e}
+.addbtn.secondary:hover{border-color:#a78bfa;color:#a78bfa}
+table{width:100%;border-collapse:collapse;margin-bottom:20px}
+th{text-align:left;padding:9px 12px;font-size:0.76rem;color:#888;border-bottom:1px solid #1e1e2e}
+td{padding:9px 12px;font-size:0.82rem;border-bottom:1px solid #0f0f1a;vertical-align:middle}
+.badge{padding:3px 9px;border-radius:9px;font-size:0.72rem}
 .badge.on{background:#4ade8022;color:#4ade80}
 .badge.off{background:#ef444422;color:#ef4444}
-.tbtn{background:transparent;border:1px solid #2e2e4e;color:#888;padding:4px 10px;border-radius:7px;cursor:pointer;font-size:0.76rem}
+.tbtn{background:transparent;border:1px solid #2e2e4e;color:#888;padding:4px 10px;border-radius:7px;cursor:pointer;font-size:0.75rem;margin-right:4px}
+.tbtn:hover{border-color:#a78bfa;color:#a78bfa}
+
+.secret-box{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:14px;padding:20px;margin-bottom:20px}
+.secret-box p{color:#888;font-size:0.85rem;margin-bottom:14px;line-height:1.6}
+.secret-row{display:flex;gap:10px;align-items:flex-end}
+.secret-row input{flex:1;padding:10px 13px;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:8px;color:#fff;font-size:0.85rem}
+.secret-row button{background:#a78bfa;color:#fff;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:0.85rem;white-space:nowrap}
+.secret-result{margin-top:12px;padding:10px 14px;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:8px;font-size:0.82rem;color:#4ade80;display:none;word-break:break-all}
+
 .modal{display:none;position:fixed;inset:0;background:#000d;z-index:100;align-items:center;justify-content:center}
 .modal.show{display:flex}
-.mbox{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:18px;padding:32px;width:440px;max-width:95vw}
+.mbox{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:18px;padding:32px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto}
 .mbox h3{margin-bottom:18px;font-size:1rem}
-.field{margin-bottom:13px}
+.field{margin-bottom:12px}
 .field label{display:block;font-size:0.78rem;color:#888;margin-bottom:4px}
 .field input{width:100%;padding:9px 12px;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:8px;color:#fff;font-size:0.85rem}
-.mbtns{display:flex;gap:9px;margin-top:18px}
-.msave{flex:1;padding:11px;background:#a78bfa;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem}
+.field input:focus{outline:none;border-color:#a78bfa}
+.field .hint{font-size:0.72rem;color:#555;margin-top:3px}
+.mbtns{display:flex;gap:9px;margin-top:16px}
+.msave{flex:1;padding:11px;background:#a78bfa;color:#fff;border:none;border-radius:8px;cursor:pointer}
 .mcancel{padding:11px 18px;background:transparent;border:1px solid #2e2e4e;color:#888;border-radius:8px;cursor:pointer}
+.toast{position:fixed;bottom:20px;right:20px;background:#4ade80;color:#000;padding:9px 18px;border-radius:9px;font-size:0.82rem;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.toast.show{opacity:1}
 </style>
 </head>
 <body>
@@ -44,58 +60,151 @@ td{padding:9px 12px;font-size:0.83rem;border-bottom:1px solid #0f0f1a}
   <a href="/admin/logout">Sign out</a>
 </nav>
 <div class="content">
+
   <div class="stats" id="stats"></div>
-  <h2>Customers</h2>
-  <button class="addbtn" onclick="document.getElementById('modal').classList.add('show')">+ Add Customer</button>
-  <table>
-    <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Created</th><th></th></tr></thead>
-    <tbody id="ctable"></tbody>
-  </table>
+
+  <!-- Step 1: Register ElevenLabs secret -->
+  <div class="section">
+    <h2>Step 1 — Register ElevenLabs API Key with LiveAvatar</h2>
+    <div class="secret-box">
+      <p>Do this once. Your ElevenLabs API key is registered with LiveAvatar and returns a <strong>secret_id</strong>. Store that secret_id when creating customers — it allows LiveAvatar to use your ElevenLabs agent directly for lip-synced voice.</p>
+      <div class="secret-row">
+        <input type="password" id="elApiKey" placeholder="ElevenLabs API key (sk_...)">
+        <button onclick="registerSecret()">Register & Get Secret ID</button>
+      </div>
+      <div class="secret-result" id="secretResult"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: Customers -->
+  <div class="section">
+    <h2>Step 2 — Customers</h2>
+    <button class="addbtn" onclick="document.getElementById('modal').classList.add('show')">+ Add Customer</button>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Avatar ID</th><th>Agent ID</th><th>Status</th><th>Created</th><th></th></tr></thead>
+      <tbody id="ctable"></tbody>
+    </table>
+  </div>
+
 </div>
 
+<!-- Add Customer Modal -->
 <div class="modal" id="modal">
   <div class="mbox">
     <h3>Add Customer</h3>
     <div class="field"><label>Name</label><input id="cName" placeholder="Petar"></div>
     <div class="field"><label>Email</label><input id="cEmail" placeholder="petar@example.com"></div>
     <div class="field"><label>Password</label><input type="password" id="cPw"></div>
-    <div class="field"><label>LiveAvatar Avatar ID</label><input id="cAvatar"></div>
-    <div class="field"><label>LiveAvatar Context ID</label><input id="cContext"></div>
-    <div class="field"><label>ElevenLabs Agent ID</label><input id="cAgent"></div>
+    <div class="field">
+      <label>LiveAvatar Avatar ID</label>
+      <input id="cAvatar" placeholder="UUID from app.liveavatar.com">
+      <div class="hint">Found in LiveAvatar dashboard → Avatars</div>
+    </div>
+    <div class="field">
+      <label>LiveAvatar Context ID (optional — only for FULL mode)</label>
+      <input id="cContext" placeholder="Leave blank if using ElevenLabs connector">
+    </div>
+    <div class="field">
+      <label>ElevenLabs Agent ID</label>
+      <input id="cAgent" placeholder="agent_...">
+      <div class="hint">Found in ElevenLabs dashboard → Conversational AI → Agents</div>
+    </div>
+    <div class="field">
+      <label>ElevenLabs Secret ID (from Step 1 above)</label>
+      <input id="cSecret" placeholder="secret_id returned after registering API key">
+      <div class="hint">Register your ElevenLabs API key above first, then paste the secret_id here</div>
+    </div>
     <div class="mbtns">
-      <button class="msave" onclick="addCustomer()">Create</button>
+      <button class="msave" onclick="addCustomer()">Create Customer</button>
       <button class="mcancel" onclick="document.getElementById('modal').classList.remove('show')">Cancel</button>
     </div>
   </div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script>
 async function loadStats(){
-  const r=await fetch('/admin/stats');const d=await r.json();
+  const r=await fetch('/admin/stats'); const d=await r.json();
   document.getElementById('stats').innerHTML=[
     ['Customers',d.total_customers],['Users',d.total_users],
     ['Sessions',d.total_sessions],['Messages',d.total_messages],
-    ['Knowledge',d.total_knowledge_chunks]
+    ['Knowledge',d.total_knowledge_chunks],['EGO Revisions',d.total_ego_revisions]
   ].map(([l,n])=>`<div class="stat"><div class="num">${n}</div><div class="label">${l}</div></div>`).join('');
 }
+
 async function loadCustomers(){
-  const r=await fetch('/admin/customers');const cs=await r.json();
-  document.getElementById('ctable').innerHTML=cs.map(c=>`
-    <tr><td>${c.name}</td><td>${c.email}</td>
-    <td><span class="badge ${c.active?'on':'off'}">${c.active?'Active':'Inactive'}</span></td>
-    <td>${c.created_at?c.created_at.slice(0,10):'-'}</td>
-    <td><button class="tbtn" onclick="toggle('${c.id}')">${c.active?'Disable':'Enable'}</button></td></tr>`).join('');
+  const r=await fetch('/admin/customers'); const cs=await r.json();
+  document.getElementById('ctable').innerHTML=cs.length?cs.map(c=>`
+    <tr>
+      <td>${c.name}</td>
+      <td>${c.email}</td>
+      <td style="font-size:0.72rem;color:#555">${c.avatar_id?c.avatar_id.slice(0,8)+'...':'—'}</td>
+      <td style="font-size:0.72rem;color:#555">${c.elevenlabs_agent_id?c.elevenlabs_agent_id.slice(0,12)+'...':'—'}</td>
+      <td><span class="badge ${c.active?'on':'off'}">${c.active?'Active':'Inactive'}</span></td>
+      <td>${c.created_at?c.created_at.slice(0,10):'-'}</td>
+      <td>
+        <button class="tbtn" onclick="toggle('${c.id}')">${c.active?'Disable':'Enable'}</button>
+        <button class="tbtn" onclick="viewEgo('${c.id}','${c.name}')">EGO</button>
+      </td>
+    </tr>`).join(''):'<tr><td colspan="7" style="color:#555;text-align:center;padding:20px">No customers yet. Add one above.</td></tr>';
 }
-async function toggle(id){await fetch('/admin/toggle_customer/'+id,{method:'POST'});loadCustomers();loadStats();}
+
+async function registerSecret(){
+  const key=document.getElementById('elApiKey').value.trim();
+  if(!key){alert('Enter ElevenLabs API key');return;}
+  const r=await fetch('/admin/register_elevenlabs_secret',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({elevenlabs_api_key:key,name:'ElevenLabs Agent Key'})
+  });
+  const d=await r.json();
+  const box=document.getElementById('secretResult');
+  box.style.display='block';
+  if(r.ok){
+    const sid=d.data?.id||d.data?.secret_id||JSON.stringify(d.data);
+    box.textContent='✅ Secret ID: '+sid+' — copy this and paste it when adding a customer';
+    box.style.color='#4ade80';
+  } else {
+    box.textContent='❌ Error: '+JSON.stringify(d);
+    box.style.color='#ef4444';
+  }
+}
+
+async function toggle(id){
+  await fetch('/admin/toggle_customer/'+id,{method:'POST'});
+  loadCustomers(); loadStats();
+}
+
+async function viewEgo(id, name){
+  const r=await fetch(`/admin/customer/${id}/ego`);
+  const d=await r.json();
+  alert(`EGO Model for ${name}:\n\n${d.persona||'No persona yet'}\n\nBeliefs: ${(d.ego?.beliefs||[]).length}\nValues: ${(d.ego?.values||[]).length}\nRelationships: ${Object.keys(d.ego?.relationships||{}).length}`);
+}
+
 async function addCustomer(){
   const r=await fetch('/admin/customers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    name:document.getElementById('cName').value,email:document.getElementById('cEmail').value,
-    password:document.getElementById('cPw').value,avatar_id:document.getElementById('cAvatar').value,
-    context_id:document.getElementById('cContext').value,elevenlabs_agent_id:document.getElementById('cAgent').value
+    name:document.getElementById('cName').value,
+    email:document.getElementById('cEmail').value,
+    password:document.getElementById('cPw').value,
+    avatar_id:document.getElementById('cAvatar').value,
+    context_id:document.getElementById('cContext').value,
+    elevenlabs_agent_id:document.getElementById('cAgent').value,
+    elevenlabs_secret_id:document.getElementById('cSecret').value
   })});
-  if(r.ok){document.getElementById('modal').classList.remove('show');loadCustomers();loadStats();}
+  if(r.ok){
+    document.getElementById('modal').classList.remove('show');
+    loadCustomers(); loadStats();
+    showToast('Customer created');
+  }
 }
-loadStats();loadCustomers();
+
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+loadStats(); loadCustomers();
 setInterval(()=>{loadStats();loadCustomers();},30000);
 </script>
 </body>

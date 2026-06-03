@@ -170,11 +170,30 @@ async function launchSession() {
   const d=await r.json();
   if(d.error){document.getElementById('lmsg').textContent='Error: '+d.error;return;}
   sessionId=d.session_id; customerId=d.customer_id;
-  const iframe=document.createElement('iframe');
-  iframe.src=d.embed_url; iframe.allow='microphone; camera';
-  iframe.style.cssText='width:100%;height:100%;border:none';
-  document.getElementById('lmsg').remove();
-  document.getElementById('vpanel').appendChild(iframe);
+
+  if(d.mode==='livekit') {
+    // ElevenLabs Agent Connector — LiveAvatar handles everything via LiveKit
+    // Use the embed URL from session_data if available
+    const embedUrl = d.session_data?.embed_url || d.session_data?.url;
+    if(embedUrl) {
+      const iframe=document.createElement('iframe');
+      iframe.src=embedUrl; iframe.allow='microphone; camera';
+      iframe.style.cssText='width:100%;height:100%;border:none';
+      document.getElementById('lmsg').remove();
+      document.getElementById('vpanel').appendChild(iframe);
+      // Hide manual voice controls — LiveAvatar handles audio
+      document.querySelector('.voice-panel').style.display='none';
+    } else {
+      document.getElementById('lmsg').textContent='Session started — connecting via LiveKit...';
+    }
+  } else {
+    // Embed mode — show iframe + manual voice controls
+    const iframe=document.createElement('iframe');
+    iframe.src=d.embed_url; iframe.allow='microphone; camera';
+    iframe.style.cssText='width:100%;height:100%;border:none';
+    document.getElementById('lmsg').remove();
+    document.getElementById('vpanel').appendChild(iframe);
+  }
 }
 
 // ── ElevenLabs Voice ──────────────────────────────────────────────────────

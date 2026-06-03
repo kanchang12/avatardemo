@@ -1,44 +1,14 @@
-<<<<<<< HEAD
-import os
-import sqlite3
-import uuid
-import base64
-import numpy as np
-from datetime import datetime
-from flask import Flask, render_template, request, jsonify, send_file, Response, g
-=======
 import os, sqlite3, uuid, base64, hashlib, json, threading, time
 import numpy as np
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_file, Response, g, session, redirect, url_for
 from flask_cors import CORS
->>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
-<<<<<<< HEAD
-
-LIVEAVATAR_API_KEY = os.getenv("LIVEAVATAR_API_KEY")
-LIVEAVATAR_AVATAR_ID = os.getenv("LIVEAVATAR_AVATAR_ID")
-LIVEAVATAR_CONTEXT_ID = os.getenv("LIVEAVATAR_CONTEXT_ID")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
-
-DATABASE = os.path.join(os.path.dirname(__file__), "data.db")
-
-# ── Face recognition setup ───────────────────────────────────────────────────
-try:
-    import face_recognition
-    FACE_RECOGNITION_AVAILABLE = True
-except ImportError:
-    FACE_RECOGNITION_AVAILABLE = False
-    print("face_recognition not installed — face ID disabled")
-
-# ── Database ─────────────────────────────────────────────────────────────────
-=======
 app.secret_key = os.getenv("SECRET_KEY", "trione-secret-change-in-prod")
 CORS(app)
 
@@ -48,7 +18,6 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 LIVEAVATAR_API_KEY = os.getenv("LIVEAVATAR_API_KEY")
 
 # ── DB ────────────────────────────────────────────────────────────────────────
->>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
 
 def get_db():
     if "db" not in g:
@@ -59,22 +28,11 @@ def get_db():
 @app.teardown_appcontext
 def close_db(e=None):
     db = g.pop("db", None)
-<<<<<<< HEAD
-    if db:
-        db.close()
-=======
     if db: db.close()
->>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
 
 def init_db():
     with sqlite3.connect(DATABASE) as db:
         db.executescript("""
-<<<<<<< HEAD
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                name TEXT DEFAULT 'Guest',
-                face_encoding TEXT,
-=======
             CREATE TABLE IF NOT EXISTS customers (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -83,6 +41,7 @@ def init_db():
                 avatar_id TEXT,
                 context_id TEXT,
                 elevenlabs_agent_id TEXT,
+                elevenlabs_secret_id TEXT,
                 persona_summary TEXT,
                 ego_model TEXT,
                 created_at TEXT,
@@ -92,31 +51,10 @@ def init_db():
                 id TEXT PRIMARY KEY,
                 face_encoding TEXT,
                 name TEXT DEFAULT 'Guest',
->>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
                 first_seen TEXT,
                 last_seen TEXT,
                 visit_count INTEGER DEFAULT 1
             );
-<<<<<<< HEAD
-
-            CREATE TABLE IF NOT EXISTS sessions (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                avatar_id TEXT,
-                started_at TEXT,
-                ended_at TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            );
-
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT,
-                user_id TEXT,
-                speaker TEXT,
-                text TEXT,
-                timestamp TEXT,
-                FOREIGN KEY (session_id) REFERENCES sessions(id)
-=======
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
                 customer_id TEXT NOT NULL,
@@ -165,152 +103,11 @@ def init_db():
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 created_at TEXT
->>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
             );
         """)
 
 init_db()
 
-<<<<<<< HEAD
-# ── Face recognition helpers ─────────────────────────────────────────────────
-
-def decode_image(b64_string):
-    """Decode base64 image to numpy array."""
-    if "," in b64_string:
-        b64_string = b64_string.split(",")[1]
-    img_bytes = base64.b64decode(b64_string)
-    import cv2
-    nparr = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    return img_rgb
-
-def get_face_encoding(img_rgb):
-    """Get 128-d face encoding from image."""
-    encodings = face_recognition.face_encodings(img_rgb)
-    if not encodings:
-        return None
-    return encodings[0]
-
-def find_matching_user(db, encoding, tolerance=0.5):
-    """Compare encoding against all stored users."""
-    users = db.execute("SELECT id, name, face_encoding, visit_count FROM users WHERE face_encoding IS NOT NULL").fetchall()
-    for user in users:
-        stored = np.array(eval(user["face_encoding"]))
-        dist = face_recognition.face_distance([stored], encoding)[0]
-        if dist < tolerance:
-            return dict(user)
-    return None
-
-# ── Routes ────────────────────────────────────────────────────────────────────
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-@app.route("/identify", methods=["POST"])
-def identify():
-    """
-    Receive base64 camera snapshot.
-    Match against stored faces.
-    If match found: return user info + history.
-    If new face: create new user, store encoding.
-    """
-    data = request.json or {}
-    image_b64 = data.get("image")
-    name = data.get("name", "Guest")
-
-    if not image_b64 or not FACE_RECOGNITION_AVAILABLE:
-        user_id = str(uuid.uuid4())
-        return jsonify({"user_id": user_id, "name": "Guest", "returning": False})
-
-    try:
-        img_rgb = decode_image(image_b64)
-        encoding = get_face_encoding(img_rgb)
-    except Exception as e:
-        user_id = str(uuid.uuid4())
-        return jsonify({"user_id": user_id, "name": "Guest", "returning": False, "error": str(e)})
-
-    db = get_db()
-
-    if encoding is not None:
-        match = find_matching_user(db, encoding)
-        if match:
-            # Returning user
-            db.execute("UPDATE users SET last_seen = ?, visit_count = visit_count + 1 WHERE id = ?",
-                       (datetime.utcnow().isoformat(), match["id"]))
-            db.commit()
-            return jsonify({
-                "user_id": match["id"],
-                "name": match["name"],
-                "returning": True,
-                "visit_count": match["visit_count"] + 1
-            })
-        else:
-            # New user — store face
-            user_id = str(uuid.uuid4())
-            encoding_str = str(encoding.tolist())
-            db.execute(
-                "INSERT INTO users (id, name, face_encoding, first_seen, last_seen, visit_count) VALUES (?, ?, ?, ?, ?, ?)",
-                (user_id, name, encoding_str, datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), 1)
-            )
-            db.commit()
-            return jsonify({"user_id": user_id, "name": name, "returning": False})
-    else:
-        # No face detected
-        user_id = str(uuid.uuid4())
-        return jsonify({"user_id": user_id, "name": "Guest", "returning": False, "face_detected": False})
-
-@app.route("/start_session", methods=["POST"])
-def start_session():
-    data = request.json or {}
-    user_id = data.get("user_id") or str(uuid.uuid4())
-
-    db = get_db()
-    user = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-    if not user:
-        db.execute(
-            "INSERT INTO users (id, name, first_seen, last_seen) VALUES (?, ?, ?, ?)",
-            (user_id, "Guest", datetime.utcnow().isoformat(), datetime.utcnow().isoformat())
-        )
-        db.commit()
-    else:
-        db.execute("UPDATE users SET last_seen = ? WHERE id = ?",
-                   (datetime.utcnow().isoformat(), user_id))
-        db.commit()
-
-    session_id = str(uuid.uuid4())
-    db.execute(
-        "INSERT INTO sessions (id, user_id, avatar_id, started_at) VALUES (?, ?, ?, ?)",
-        (session_id, user_id, LIVEAVATAR_AVATAR_ID, datetime.utcnow().isoformat())
-    )
-    db.commit()
-
-    history = db.execute(
-        "SELECT speaker, text FROM messages WHERE user_id = ? ORDER BY timestamp DESC LIMIT 20",
-        (user_id,)
-    ).fetchall()
-    history = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(history)]
-
-    resp = requests.post(
-        "https://api.liveavatar.com/v2/embeddings",
-        headers={
-            "X-API-KEY": LIVEAVATAR_API_KEY,
-            "Content-Type": "application/json"
-        },
-        json={
-            "avatar_id": LIVEAVATAR_AVATAR_ID,
-            "context_id": LIVEAVATAR_CONTEXT_ID,
-            "is_sandbox": True
-        }
-    )
-
-    if resp.status_code != 200:
-        return jsonify({"error": resp.text}), 500
-
-    result = resp.json()
-    embed_url = result["data"]["url"]
-=======
 # ── Seed default admin ────────────────────────────────────────────────────────
 
 def seed_admin():
@@ -338,7 +135,33 @@ def get_customer(db, cid):
 def get_first_customer(db):
     return db.execute("SELECT * FROM customers WHERE active=1 LIMIT 1").fetchone()
 
-def liveavatar_embed(avatar_id, context_id, sandbox=True):
+def liveavatar_start_session(avatar_id, elevenlabs_secret_id, elevenlabs_agent_id):
+    """
+    Start a LiveAvatar LITE session with ElevenLabs Agent Connector.
+    LiveAvatar handles all audio, lip sync and WebRTC — no manual audio pipeline needed.
+    Returns a LiveKit room token for the frontend to connect with.
+    """
+    if not avatar_id or not elevenlabs_secret_id or not elevenlabs_agent_id:
+        return None, "Missing avatar_id, elevenlabs_secret_id or elevenlabs_agent_id"
+    r = requests.post(
+        "https://api.liveavatar.com/v1/sessions/start",
+        headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
+        json={
+            "mode": "LITE",
+            "avatar_id": avatar_id,
+            "elevenlabs_agent_config": {
+                "secret_id": elevenlabs_secret_id,
+                "agent_id": elevenlabs_agent_id
+            }
+        }
+    )
+    if r.status_code != 200:
+        return None, r.text
+    data = r.json().get("data", {})
+    return data, None
+
+def liveavatar_embed(avatar_id, context_id=None, sandbox=True):
+    """Fallback embed — used only if secret_id not configured."""
     if not avatar_id or not context_id:
         return None, "Missing avatar_id or context_id"
     r = requests.post(
@@ -640,41 +463,37 @@ def user_session():
     )
     db.commit()
 
-    embed_url, err = liveavatar_embed(customer["avatar_id"], customer["context_id"])
-    if err:
-        return jsonify({"error": err}), 500
->>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
+    secret_id = customer["elevenlabs_secret_id"] if customer["elevenlabs_secret_id"] else None
+    agent_id = customer["elevenlabs_agent_id"] if customer["elevenlabs_agent_id"] else None
 
-    return jsonify({
-        "embed_url": embed_url,
-        "session_id": session_id,
-<<<<<<< HEAD
-        "user_id": user_id,
-        "history": history,
-        "returning": user is not None
-    })
-
-@app.route("/save_message", methods=["POST"])
-def save_message():
-    data = request.json or {}
-    session_id = data.get("session_id")
-    user_id = data.get("user_id")
-    speaker = data.get("speaker")
-    text = data.get("text")
-
-    if not all([session_id, user_id, speaker, text]):
-        return jsonify({"error": "Missing fields"}), 400
-
-    db = get_db()
-    db.execute(
-        "INSERT INTO messages (session_id, user_id, speaker, text, timestamp) VALUES (?, ?, ?, ?, ?)",
-        (session_id, user_id, speaker, text, datetime.utcnow().isoformat())
-=======
-        "customer_id": customer["id"],
-        "customer_name": customer["name"],
-        "rag_context": rag_context,
-        "persona": customer["persona_summary"] or ""
-    })
+    if secret_id and agent_id:
+        # Use ElevenLabs Agent Connector — LiveAvatar handles everything
+        session_data, err = liveavatar_start_session(customer["avatar_id"], secret_id, agent_id)
+        if err:
+            return jsonify({"error": err}), 500
+        return jsonify({
+            "mode": "livekit",
+            "session_data": session_data,
+            "session_id": session_id,
+            "customer_id": customer["id"],
+            "customer_name": customer["name"],
+            "rag_context": rag_context,
+            "persona": customer["persona_summary"] or ""
+        })
+    else:
+        # Fallback to embed mode
+        embed_url, err = liveavatar_embed(customer["avatar_id"], customer["context_id"])
+        if err:
+            return jsonify({"error": err}), 500
+        return jsonify({
+            "mode": "embed",
+            "embed_url": embed_url,
+            "session_id": session_id,
+            "customer_id": customer["id"],
+            "customer_name": customer["name"],
+            "rag_context": rag_context,
+            "persona": customer["persona_summary"] or ""
+        })
 
 @app.route("/u/message", methods=["POST"])
 def user_message():
@@ -684,48 +503,10 @@ def user_message():
         "INSERT INTO messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (?,?,?,?,?,?)",
         (data.get("session_id"), data.get("customer_id"), data.get("user_id"),
          data.get("speaker"), data.get("text"), datetime.utcnow().isoformat())
->>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
     )
     db.commit()
     return jsonify({"ok": True})
 
-<<<<<<< HEAD
-@app.route("/history/<user_id>")
-def get_history(user_id):
-    db = get_db()
-    messages = db.execute(
-        "SELECT speaker, text, timestamp FROM messages WHERE user_id = ? ORDER BY timestamp DESC LIMIT 50",
-        (user_id,)
-    ).fetchall()
-    return jsonify([dict(m) for m in messages])
-
-@app.route("/el/signed_url")
-def el_signed_url():
-    resp = requests.get(
-        "https://api.elevenlabs.io/v1/convai/conversation/get_signed_url",
-        headers={"xi-api-key": ELEVENLABS_API_KEY},
-        params={"agent_id": ELEVENLABS_AGENT_ID}
-    )
-    if resp.status_code != 200:
-        return jsonify({"error": resp.text}), 500
-    return jsonify(resp.json())
-
-@app.route("/avatar/thumbnail")
-def avatar_thumbnail():
-    try:
-        resp = requests.get(
-            f"https://api.liveavatar.com/v2/avatars/{LIVEAVATAR_AVATAR_ID}",
-            headers={"X-API-KEY": LIVEAVATAR_API_KEY}
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            thumb = data.get("data", {}).get("thumbnail_url") or data.get("data", {}).get("preview_url")
-            if thumb:
-                img = requests.get(thumb)
-                return Response(img.content, mimetype=img.headers.get("Content-Type", "image/jpeg"))
-    except Exception:
-        pass
-=======
 # ════════════════════════════════════════════════════════════════════════════
 # CUSTOMER PORTAL
 # ════════════════════════════════════════════════════════════════════════════
@@ -772,9 +553,8 @@ def customer_session():
     )
     db.commit()
 
-    embed_url, err = liveavatar_embed(customer["avatar_id"], customer["context_id"])
-    if err:
-        return jsonify({"error": err}), 500
+    secret_id = customer["elevenlabs_secret_id"] if customer["elevenlabs_secret_id"] else None
+    agent_id = customer["elevenlabs_agent_id"] if customer["elevenlabs_agent_id"] else None
 
     knowledge_count = db.execute(
         "SELECT COUNT(*) as cnt FROM knowledge_base WHERE customer_id=?", (customer["id"],)
@@ -788,14 +568,32 @@ def customer_session():
         except:
             pass
 
-    return jsonify({
-        "embed_url": embed_url,
-        "session_id": session_id,
-        "customer_id": customer["id"],
-        "knowledge_count": knowledge_count,
-        "persona": customer["persona_summary"] or "",
-        "ego_model": ego_model
-    })
+    if secret_id and agent_id:
+        session_data, err = liveavatar_start_session(customer["avatar_id"], secret_id, agent_id)
+        if err:
+            return jsonify({"error": err}), 500
+        return jsonify({
+            "mode": "livekit",
+            "session_data": session_data,
+            "session_id": session_id,
+            "customer_id": customer["id"],
+            "knowledge_count": knowledge_count,
+            "persona": customer["persona_summary"] or "",
+            "ego_model": ego_model
+        })
+    else:
+        embed_url, err = liveavatar_embed(customer["avatar_id"], customer["context_id"])
+        if err:
+            return jsonify({"error": err}), 500
+        return jsonify({
+            "mode": "embed",
+            "embed_url": embed_url,
+            "session_id": session_id,
+            "customer_id": customer["id"],
+            "knowledge_count": knowledge_count,
+            "persona": customer["persona_summary"] or "",
+            "ego_model": ego_model
+        })
 
 @app.route("/customer/train", methods=["POST"])
 def customer_train():
@@ -999,6 +797,14 @@ def admin_create_customer():
         (cid, data["name"], data["email"], hash_pw(data["password"]),
          data.get("avatar_id"), data.get("context_id"),
          data.get("elevenlabs_agent_id"), datetime.utcnow().isoformat())
+    # Store elevenlabs_secret_id if provided
+    if data.get("elevenlabs_secret_id"):
+        db.execute("UPDATE customers SET elevenlabs_secret_id=? WHERE id=?",
+                   (data["elevenlabs_secret_id"], cid))
+    db.commit()
+    return jsonify({"ok": True, "id": cid})
+
+def _admin_create_customer_placeholder(): pass  # marker
     )
     db.commit()
     return jsonify({"ok": True, "id": cid})
@@ -1040,6 +846,34 @@ def admin_customer_ego(cid):
         except: pass
     return jsonify({"name": c["name"], "persona": c["persona_summary"], "ego": ego})
 
+# ── Register ElevenLabs secret with LiveAvatar ────────────────────────────────
+
+@app.route("/admin/register_elevenlabs_secret", methods=["POST"])
+def register_elevenlabs_secret():
+    """
+    Register the ElevenLabs API key with LiveAvatar as a secret.
+    Only needs to be done once. Returns the secret_id to store per customer.
+    """
+    if "admin_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    data = request.json or {}
+    el_api_key = data.get("elevenlabs_api_key")
+    secret_name = data.get("name", "ElevenLabs Agent Key")
+    if not el_api_key:
+        return jsonify({"error": "Missing elevenlabs_api_key"}), 400
+    r = requests.post(
+        "https://api.liveavatar.com/v1/secrets",
+        headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
+        json={
+            "secret_type": "ELEVENLABS_API_KEY",
+            "secret_value": el_api_key,
+            "secret_name": secret_name
+        }
+    )
+    if r.status_code not in [200, 201]:
+        return jsonify({"error": r.text}), 500
+    return jsonify(r.json())
+
 # ── Shared ────────────────────────────────────────────────────────────────────
 
 @app.route("/el/signed_url")
@@ -1079,7 +913,6 @@ def avatar_thumbnail():
                     return Response(img.content, mimetype=img.headers.get("Content-Type", "image/jpeg"))
         except Exception:
             pass
->>>>>>> f08164b (TRIONE digital twin — EGO engine, three portals, face recognition)
     local = os.path.join(os.path.dirname(__file__), "static", "petar.jpg")
     if os.path.exists(local):
         return send_file(local, mimetype="image/jpeg")
