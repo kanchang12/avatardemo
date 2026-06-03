@@ -150,7 +150,7 @@ def liveavatar_start_session(avatar_id, elevenlabs_secret_id, elevenlabs_agent_i
             "mode": "LITE",
             "avatar_id": avatar_id,
             "elevenlabs_agent_config": {
-                "secret_id": elevenlabs_secret_id,
+                "secret_id": "458e9114-0025-4b78-b7da-9d718c9b6fe4",
                 "agent_id": elevenlabs_agent_id
             }
         }
@@ -463,7 +463,7 @@ def user_session():
     )
     db.commit()
 
-    secret_id = customer["elevenlabs_secret_id"] if customer["elevenlabs_secret_id"] else None
+    secret_id = "458e9114-0025-4b78-b7da-9d718c9b6fe4"
     agent_id = customer["elevenlabs_agent_id"] if customer["elevenlabs_agent_id"] else None
 
     if secret_id and agent_id:
@@ -553,7 +553,7 @@ def customer_session():
     )
     db.commit()
 
-    secret_id = customer["elevenlabs_secret_id"] if customer["elevenlabs_secret_id"] else None
+    secret_id = "458e9114-0025-4b78-b7da-9d718c9b6fe4"
     agent_id = customer["elevenlabs_agent_id"] if customer["elevenlabs_agent_id"] else None
 
     knowledge_count = db.execute(
