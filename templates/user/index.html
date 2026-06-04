@@ -12,13 +12,12 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .sub{color:#888;font-size:1.05rem;margin-bottom:56px;text-align:center}
 .card{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:24px;overflow:hidden;width:320px;cursor:pointer;transition:all 0.3s;text-align:center}
 .card:hover{border-color:#a78bfa;transform:translateY(-8px);box-shadow:0 20px 60px rgba(167,139,250,0.2)}
-.card img{width:100%;height:380px;object-fit:cover;object-position:top;background:#1e1e2e;min-height:380px}
+.card img{width:100%;height:380px;object-fit:cover;object-position:top;background:#1e1e2e}
 .card .info{padding:22px}
 .card h2{font-size:1.4rem;margin-bottom:8px}
 .card p{color:#888;font-size:0.88rem;line-height:1.6}
 .btn-talk{display:block;margin:14px 20px 20px;padding:14px;background:#a78bfa;color:#fff;border:none;border-radius:12px;font-size:1rem;cursor:pointer;width:calc(100% - 40px)}
 .btn-talk:hover{background:#7c3aed}
-
 #cam-prompt{display:none;position:fixed;inset:0;background:#000d;z-index:100;align-items:center;justify-content:center}
 .cam-box{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:20px;padding:40px;text-align:center;max-width:400px;width:90%}
 .cam-box h2{margin-bottom:10px}
@@ -26,31 +25,35 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .cam-box video{width:180px;height:180px;border-radius:50%;object-fit:cover;border:3px solid #a78bfa;display:block;margin:0 auto 22px}
 .btn-p{background:#a78bfa;color:#fff;border:none;padding:11px 28px;border-radius:10px;cursor:pointer;font-size:0.95rem;margin:4px}
 .btn-s{background:transparent;color:#888;border:1px solid #2e2e4e;padding:11px 28px;border-radius:10px;cursor:pointer;font-size:0.95rem;margin:4px}
-
 #talk-page{display:none;flex-direction:column;height:100vh}
-.talk-nav{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid #1e1e2e;background:#0a0a0f}
+.talk-nav{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid #1e1e2e;background:#0a0a0f;flex-shrink:0}
 .talk-nav button{background:transparent;border:1px solid #2e2e4e;color:#888;padding:6px 16px;border-radius:16px;cursor:pointer;font-size:0.82rem}
 .talk-nav h2{color:#a78bfa;font-size:1.05rem;letter-spacing:2px}
-.live{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:0.8rem;color:#4ade80}
-.dot{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:blink 1.2s infinite}
+.status-pill{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:0.8rem;color:#888}
+.sdot{width:8px;height:8px;border-radius:50%;background:#333}
 .talk-body{display:flex;flex:1;overflow:hidden}
-.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center}
-#avatarContainer{width:100%;height:100%}
-.lmsg{color:#555;font-size:0.9rem;position:absolute}
+.vpanel{flex:1;background:#0f0f1a;position:relative}
+#avatarVideo{width:100%;height:100%;object-fit:cover;display:block}
+.lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555;font-size:0.9rem;text-align:center;width:100%}
 .side{width:340px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column}
 .ubar{padding:14px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:12px}
 .ucam{width:52px;height:52px;border-radius:50%;overflow:hidden;border:2px solid #2e2e4e;background:#1e1e2e;flex-shrink:0}
 .ucam video{width:100%;height:100%;object-fit:cover}
 .uinfo h3{font-size:0.92rem}
 .uinfo p{font-size:0.78rem;color:#888;margin-top:2px}
-.status-bar{padding:12px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:8px;font-size:0.82rem;color:#888}
+.controls{padding:12px 18px;border-bottom:1px solid #1e1e2e;display:flex;gap:8px}
+.ctrl-btn{flex:1;padding:10px;border:none;border-radius:9px;cursor:pointer;font-size:0.85rem;font-weight:600;transition:background 0.2s}
+.ctrl-btn.start{background:#a78bfa;color:#fff}
+.ctrl-btn.start:hover{background:#9061f9}
+.ctrl-btn.end{background:#ef4444;color:#fff}
+.ctrl-btn.end:hover{background:#dc2626}
+.ctrl-btn:disabled{background:#1e1e2e;color:#555;cursor:not-allowed}
 .chat-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
 .msg{font-size:0.88rem;line-height:1.6}
 .msg .who{font-weight:600;font-size:0.76rem;margin-bottom:3px}
 .msg.user .who{color:#a78bfa}
 .msg.avatar .who{color:#4ade80}
 .msg .text{color:#ccc}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
 </style>
 </head>
 <body>
@@ -71,7 +74,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 <div id="cam-prompt">
   <div class="cam-box">
     <h2>Welcome</h2>
-    <p>Allow camera so Petar remembers you and continues from where you left off.</p>
+    <p>Allow camera so Petar remembers you.</p>
     <video id="camPrev" autoplay muted playsinline></video>
     <div>
       <button class="btn-p" onclick="captureAndContinue()">Remember me</button>
@@ -84,12 +87,15 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   <div class="talk-nav">
     <button onclick="goBack()">← Back</button>
     <h2>TRIONE</h2>
-    <div class="live"><div class="dot"></div>Live</div>
+    <div class="status-pill">
+      <div class="sdot" id="sDot"></div>
+      <span id="sText">Connecting...</span>
+    </div>
   </div>
   <div class="talk-body">
     <div class="vpanel">
-      <p class="lmsg" id="lmsg">Connecting...</p>
-      <div id="avatarContainer"><video id="avatarVideo" autoplay playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video></div>
+      <div class="lmsg" id="lmsg">Loading...</div>
+      <video id="avatarVideo" autoplay playsinline></video>
     </div>
     <div class="side">
       <div class="ubar">
@@ -99,9 +105,9 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
           <p id="uStatus">New conversation</p>
         </div>
       </div>
-      <div class="status-bar">
-        <div class="dot" id="sDot" style="background:#333;animation:none"></div>
-        <span id="sText">Connecting...</span>
+      <div class="controls">
+        <button class="ctrl-btn start" id="startBtn" onclick="startConversation()" disabled>🎙 Start</button>
+        <button class="ctrl-btn end"   id="endBtn"   onclick="endConversation()"   disabled>⏹ End</button>
       </div>
       <div class="chat-log" id="chatLog">
         <div class="msg avatar"><div class="who">Petar</div><div class="text">Hello. Tell me what's on your mind.</div></div>
@@ -110,123 +116,137 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   </div>
 </div>
 
-<script type="module">
-import { LiveAvatarSession } from 'https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/+esm';
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<script>
+let camStream=null, userId=null, sessionId=null, customerId=null;
+let livekitRoom=null, livekitUrl=null, livekitToken=null;
 
-let camStream = null, userId = null, sessionId = null, customerId = null;
-let liveSession = null;
-
-window.initTalk = async function() {
-  document.getElementById('cam-prompt').style.display = 'flex';
-  try {
-    camStream = await navigator.mediaDevices.getUserMedia({video: true, audio: false});
-    document.getElementById('camPrev').srcObject = camStream;
-  } catch(e) { window.skipCamera(); }
+function initTalk() {
+  document.getElementById('cam-prompt').style.display='flex';
+  navigator.mediaDevices.getUserMedia({video:true,audio:false})
+    .then(s=>{camStream=s;document.getElementById('camPrev').srcObject=s;})
+    .catch(()=>skipCamera());
 }
 
-window.captureAndContinue = async function() {
-  const v = document.getElementById('camPrev');
-  const c = document.createElement('canvas');
-  c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext('2d').drawImage(v, 0, 0);
-  const b64 = c.toDataURL('image/jpeg', 0.8);
-  if (camStream) camStream.getTracks().forEach(t => t.stop());
-  document.getElementById('cam-prompt').style.display = 'none';
+async function captureAndContinue() {
+  const v=document.getElementById('camPrev');
+  const c=document.createElement('canvas');
+  c.width=v.videoWidth;c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  const b64=c.toDataURL('image/jpeg',0.8);
+  if(camStream) camStream.getTracks().forEach(t=>t.stop());
+  document.getElementById('cam-prompt').style.display='none';
   try {
-    const r = await fetch('/u/identify', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({image: b64})});
-    const d = await r.json();
-    userId = d.user_id;
-    document.getElementById('uName').textContent = d.name || 'Guest';
-    document.getElementById('uStatus').textContent = d.returning ? 'Welcome back' : 'First visit';
-    if (d.history && d.history.length) renderHistory(d.history);
-  } catch(e) {}
-  launchSession();
+    const r=await fetch('/u/identify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:b64})});
+    const d=await r.json();
+    userId=d.user_id;
+    document.getElementById('uName').textContent=d.name||'Guest';
+    document.getElementById('uStatus').textContent=d.returning?'Welcome back':'First visit';
+    if(d.history&&d.history.length) renderHistory(d.history);
+  } catch(e){}
+  launchPage();
 }
 
-window.skipCamera = function() {
-  if (camStream) camStream.getTracks().forEach(t => t.stop());
-  document.getElementById('cam-prompt').style.display = 'none';
-  launchSession();
+function skipCamera() {
+  if(camStream) camStream.getTracks().forEach(t=>t.stop());
+  document.getElementById('cam-prompt').style.display='none';
+  launchPage();
 }
 
-async function launchSession() {
-  document.getElementById('landing').style.display = 'none';
-  document.getElementById('talk-page').style.display = 'flex';
-  try { const s = await navigator.mediaDevices.getUserMedia({video: true}); document.getElementById('userCam').srcObject = s; } catch(e) {}
-
-  setStatus('Connecting...', '#f59e0b');
-
+async function launchPage() {
+  document.getElementById('landing').style.display='none';
+  document.getElementById('talk-page').style.display='flex';
+  try{const s=await navigator.mediaDevices.getUserMedia({video:true});document.getElementById('userCam').srcObject=s;}catch(e){}
+  setStatus('Getting session...','#f59e0b');
+  setMsg('Connecting to Petar...');
   try {
-    const r = await fetch('/u/session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id: userId})});
-    const d = await r.json();
-    if (d.error) { document.getElementById('lmsg').textContent = 'Error: ' + d.error; setStatus('Error', '#ef4444'); return; }
+    const r=await fetch('/u/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId})});
+    const d=await r.json();
+    if(d.error){setStatus('Error: '+d.error,'#ef4444');setMsg('Error: '+d.error);return;}
+    sessionId=d.session_id;
+    customerId=d.customer_id;
+    livekitUrl=d.la_session.livekit_url;
+    livekitToken=d.la_session.livekit_client_token;
+    setStatus('Ready','#4ade80');
+    setMsg('Ready — click Start to talk');
+    document.getElementById('startBtn').disabled=false;
+  } catch(e){setStatus('Error','#ef4444');setMsg('Connection error: '+e.message);}
+}
 
-    sessionId   = d.session_id;
-    customerId  = d.customer_id;
+async function startConversation() {
+  document.getElementById('startBtn').disabled=true;
+  setStatus('Connecting...','#f59e0b');
+  setMsg('Starting...');
+  try {
+    const { Room, RoomEvent, Track } = LivekitClient;
+    livekitRoom = new Room();
 
-    const la = d.la_session;
-    document.getElementById('lmsg').style.display = 'none';
-
-    const token = la.session_token;
-    liveSession = new LiveAvatarSession(token, { voiceChat: true });
-
-    liveSession.on('connected', () => setStatus('Live', '#4ade80'));
-    liveSession.on('disconnected', () => setStatus('Disconnected', '#ef4444'));
-    liveSession.on('agent_response', (data) => {
-      const text = data?.text || data?.agent_response || '';
-      if (text) { addMsg('avatar', 'Petar', text); saveMsg('avatar', text); }
+    livekitRoom.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
+      if(track.kind===Track.Kind.Video) {
+        const videoEl=document.getElementById('avatarVideo');
+        track.attach(videoEl);
+        setMsg('');
+        setStatus('Live','#4ade80');
+        document.getElementById('endBtn').disabled=false;
+      }
+      if(track.kind===Track.Kind.Audio) track.attach();
     });
-    liveSession.on('user_transcript', (data) => {
-      const text = data?.text || data?.user_transcript || '';
-      if (text) { addMsg('user', 'You', text); saveMsg('user', text); }
+
+    livekitRoom.on(RoomEvent.DataReceived, (data) => {
+      try {
+        const msg=JSON.parse(new TextDecoder().decode(data));
+        if(msg.event_type==='avatar.transcription'&&msg.text) {
+          addMsg('avatar','Petar',msg.text);
+          saveMsg('avatar',msg.text);
+        }
+        if(msg.event_type==='user.transcription'&&msg.text) {
+          addMsg('user','You',msg.text);
+          saveMsg('user',msg.text);
+        }
+      } catch(e){}
     });
 
-    const videoEl = document.getElementById('avatarVideo');
-    await liveSession.start(videoEl);
-    setStatus('Live', '#4ade80');
+    livekitRoom.on(RoomEvent.Disconnected, ()=>{
+      setStatus('Ended','#888');
+      document.getElementById('startBtn').disabled=false;
+      document.getElementById('endBtn').disabled=true;
+    });
+
+    await livekitRoom.connect(livekitUrl, livekitToken);
+    await livekitRoom.localParticipant.setMicrophoneEnabled(true);
 
   } catch(e) {
-    document.getElementById('lmsg').textContent = 'Error: ' + e.message;
-    setStatus('Error', '#ef4444');
+    setStatus('Error','#ef4444');
+    setMsg('Error: '+e.message);
+    document.getElementById('startBtn').disabled=false;
     console.error(e);
   }
 }
 
-async function saveMsg(speaker, text) {
-  try {
-    await fetch('/u/message', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({session_id: sessionId, customer_id: customerId, user_id: userId, speaker, text})});
-  } catch(e) {}
+async function endConversation() {
+  if(livekitRoom){await livekitRoom.disconnect();livekitRoom=null;}
+  document.getElementById('endBtn').disabled=true;
+  document.getElementById('startBtn').disabled=false;
+  setStatus('Ended','#888');
+  setMsg('Conversation ended. Click Start to talk again.');
 }
 
-function setStatus(text, color) {
-  document.getElementById('sText').textContent = text;
-  const dot = document.getElementById('sDot');
-  dot.style.background = color;
-  dot.style.animation = color === '#4ade80' ? 'blink 1.2s infinite' : 'none';
+async function saveMsg(speaker,text) {
+  try{await fetch('/u/message',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({session_id:sessionId,customer_id:customerId,user_id:userId,speaker,text})});}catch(e){}
 }
 
-function addMsg(cls, who, text) {
-  if (!text) return;
-  const log = document.getElementById('chatLog');
-  log.innerHTML += `<div class="msg ${cls}"><div class="who">${who}</div><div class="text">${text}</div></div>`;
-  log.scrollTop = log.scrollHeight;
+function goBack() {
+  if(livekitRoom){livekitRoom.disconnect();livekitRoom=null;}
+  document.getElementById('talk-page').style.display='none';
+  document.getElementById('landing').style.display='flex';
+  sessionId=null;customerId=null;
 }
 
-function renderHistory(history) {
-  const log = document.getElementById('chatLog');
-  log.innerHTML = '';
-  history.forEach(m => addMsg(m.speaker === 'user' ? 'user' : 'avatar', m.speaker === 'user' ? 'You' : 'Petar', m.text));
-}
-
-window.goBack = async function() {
-  if (liveSession) { try { await liveSession.stop(); } catch(e) {} liveSession = null; }
-  document.getElementById('talk-page').style.display = 'none';
-  document.getElementById('landing').style.display = 'flex';
-  document.getElementById('lmsg').style.display = 'block';
-  document.getElementById('lmsg').textContent = 'Connecting...';
-  sessionId = null; customerId = null;
-}
+function setStatus(text,color){document.getElementById('sText').textContent=text;document.getElementById('sDot').style.background=color;}
+function setMsg(text){const el=document.getElementById('lmsg');el.textContent=text;el.style.display=text?'block':'none';}
+function addMsg(cls,who,text){if(!text)return;const log=document.getElementById('chatLog');log.innerHTML+=`<div class="msg ${cls}"><div class="who">${who}</div><div class="text">${text}</div></div>`;log.scrollTop=log.scrollHeight;}
+function renderHistory(history){const log=document.getElementById('chatLog');log.innerHTML='';history.forEach(m=>addMsg(m.speaker==='user'?'user':'avatar',m.speaker==='user'?'You':'Petar',m.text));}
 </script>
 </body>
 </html>
