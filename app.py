@@ -21,7 +21,8 @@ ELEVENLABS_AGENT_ID  = os.getenv("ELEVENLABS_AGENT_ID")
 DID_API_KEY          = os.getenv("DID_API_KEY")
 DID_AGENT_ID         = os.getenv("DID_AGENT_ID")
 LIVEAVATAR_API_KEY   = os.getenv("LIVEAVATAR_API_KEY", "")
-LIVEAVATAR_AVATAR_ID = os.getenv("LIVEAVATAR_AVATAR_ID", "")
+LIVEAVATAR_AVATAR_ID   = os.getenv("LIVEAVATAR_AVATAR_ID", "")
+ELEVENLABS_SECRET_ID  = os.getenv("ELEVENLABS_SECRET_ID", "")
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ def liveavatar_create_session(avatar_id=None, elevenlabs_secret_id=None, agent_i
     if not aid:
         return None, "Missing LIVEAVATAR_AVATAR_ID"
     el_agent = agent_id or ELEVENLABS_AGENT_ID
-    el_secret = elevenlabs_secret_id or ""
+    el_secret = elevenlabs_secret_id or ELEVENLABS_SECRET_ID or ""
 
     headers = {"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"}
 
@@ -157,7 +158,22 @@ def liveavatar_create_session(avatar_id=None, elevenlabs_secret_id=None, agent_i
     if not session_token:
         return None, f"No session_token in response: {r1.text}"
 
-    return {"session_token": session_token}, None
+    # Step 2 — start session, get livekit credentials
+    r2 = requests.post(
+        "https://api.liveavatar.com/v1/sessions/start",
+        headers={"Authorization": f"Bearer {session_token}", "Content-Type": "application/json"},
+        json={},
+        timeout=15
+    )
+    if r2.status_code not in (200, 201):
+        return None, f"LiveAvatar start error {r2.status_code}: {r2.text}"
+    sd = r2.json().get("data", r2.json())
+    return {
+        "session_id":           sd.get("session_id"),
+        "livekit_url":          sd.get("livekit_url"),
+        "livekit_client_token": sd.get("livekit_client_token"),
+        "ws_url":               sd.get("ws_url", ""),
+    }, None
 
 # ── Gemini ────────────────────────────────────────────────────────────────────
 
