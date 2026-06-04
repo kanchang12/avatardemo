@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Talk to Petar</title>
-<!-- LiveAvatar Web SDK -->
-
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;flex-direction:column}
@@ -36,9 +34,8 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .live{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:0.8rem;color:#4ade80}
 .dot{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:blink 1.2s infinite}
 .talk-body{display:flex;flex:1;overflow:hidden}
-.vpanel{flex:1;background:#0f0f1a;position:relative}
-.vpanel video{width:100%;height:100%;object-fit:cover;display:block}
-.vpanel .lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555}
+.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center}
+.vpanel .lmsg{color:#555;font-size:0.9rem}
 .side{width:340px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column}
 .ubar{padding:14px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:12px}
 .ucam{width:52px;height:52px;border-radius:50%;overflow:hidden;border:2px solid #2e2e4e;background:#1e1e2e;flex-shrink:0}
@@ -46,6 +43,12 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .uinfo h3{font-size:0.92rem}
 .uinfo p{font-size:0.78rem;color:#888;margin-top:2px}
 .status-bar{padding:12px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:8px;font-size:0.82rem;color:#888}
+.voice-controls{padding:14px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:10px}
+.voice-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#a78bfa;color:#fff;border:none;border-radius:10px;padding:11px;font-size:0.88rem;cursor:pointer;font-weight:600;transition:background 0.2s}
+.voice-btn:hover{background:#9061f9}
+.voice-btn:disabled{background:#2e2e4e;color:#555;cursor:not-allowed}
+.voice-btn.active{background:#ef4444}
+.voice-btn.active:hover{background:#dc2626}
 .chat-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
 .msg{font-size:0.88rem;line-height:1.6}
 .msg .who{font-weight:600;font-size:0.76rem;margin-bottom:3px}
@@ -57,6 +60,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 </head>
 <body>
 
+<!-- LANDING -->
 <div id="landing">
   <h1>TRIONE</h1>
   <p class="sub">A conversation worth having</p>
@@ -70,6 +74,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   </div>
 </div>
 
+<!-- CAMERA PROMPT -->
 <div id="cam-prompt">
   <div class="cam-box">
     <h2>Welcome</h2>
@@ -82,6 +87,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   </div>
 </div>
 
+<!-- TALK PAGE -->
 <div id="talk-page">
   <div class="talk-nav">
     <button onclick="goBack()">← Back</button>
@@ -89,9 +95,9 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
     <div class="live"><div class="dot"></div>Live</div>
   </div>
   <div class="talk-body">
+    <!-- D-ID avatar renders here via embed script -->
     <div class="vpanel" id="vpanel">
       <p class="lmsg" id="lmsg">Connecting...</p>
-      <div id="avatarContainer" style="width:100%;height:100%;display:none"></div>
     </div>
     <div class="side">
       <div class="ubar">
@@ -101,7 +107,17 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
           <p id="uStatus">New conversation</p>
         </div>
       </div>
-      <div class="status-bar"><div class="dot" id="sDot" style="background:#333"></div><span id="sText">Connecting...</span></div>
+      <div class="status-bar">
+        <div class="dot" id="sDot" style="background:#333;animation:none"></div>
+        <span id="sText">Connecting...</span>
+      </div>
+      <!-- ElevenLabs voice button -->
+      <div class="voice-controls">
+        <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()" disabled>
+          <span id="voiceBtnIcon">🎙</span>
+          <span id="voiceBtnText">Start Voice</span>
+        </button>
+      </div>
       <div class="chat-log" id="chatLog">
         <div class="msg avatar"><div class="who">Petar</div><div class="text">Hello. Tell me what's on your mind.</div></div>
       </div>
@@ -110,84 +126,196 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 </div>
 
 <script>
-let camStream=null, userId=null, sessionId=null, customerId=null;
+let camStream = null, userId = null, sessionId = null, customerId = null;
+let conversation = null, isVoiceConnected = false, signedUrl = null, elAgentId = null;
 
 async function initTalk() {
-  document.getElementById('cam-prompt').style.display='flex';
+  document.getElementById('cam-prompt').style.display = 'flex';
   try {
-    camStream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
-    document.getElementById('camPrev').srcObject=camStream;
-  } catch(e){skipCamera();}
+    camStream = await navigator.mediaDevices.getUserMedia({video: true, audio: false});
+    document.getElementById('camPrev').srcObject = camStream;
+  } catch(e) { skipCamera(); }
 }
 
 async function captureAndContinue() {
-  const v=document.getElementById('camPrev');
-  const c=document.createElement('canvas');
-  c.width=v.videoWidth; c.height=v.videoHeight;
-  c.getContext('2d').drawImage(v,0,0);
-  const b64=c.toDataURL('image/jpeg',0.8);
-  if(camStream) camStream.getTracks().forEach(t=>t.stop());
-  document.getElementById('cam-prompt').style.display='none';
+  const v = document.getElementById('camPrev');
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  const b64 = c.toDataURL('image/jpeg', 0.8);
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  document.getElementById('cam-prompt').style.display = 'none';
   try {
-    const r=await fetch('/u/identify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:b64})});
-    const d=await r.json();
-    userId=d.user_id;
-    document.getElementById('uName').textContent=d.name||'Guest';
-    document.getElementById('uStatus').textContent=d.returning?'Welcome back':'First visit';
-    if(d.history&&d.history.length) renderHistory(d.history);
-  } catch(e){}
+    const r = await fetch('/u/identify', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({image: b64})});
+    const d = await r.json();
+    userId = d.user_id;
+    document.getElementById('uName').textContent = d.name || 'Guest';
+    document.getElementById('uStatus').textContent = d.returning ? 'Welcome back' : 'First visit';
+    if (d.history && d.history.length) renderHistory(d.history);
+  } catch(e) {}
   launchSession();
 }
 
 function skipCamera() {
-  if(camStream) camStream.getTracks().forEach(t=>t.stop());
-  document.getElementById('cam-prompt').style.display='none';
+  if (camStream) camStream.getTracks().forEach(t => t.stop());
+  document.getElementById('cam-prompt').style.display = 'none';
   launchSession();
 }
 
 async function launchSession() {
-  document.getElementById('landing').style.display='none';
-  document.getElementById('talk-page').style.display='flex';
-  try { const s=await navigator.mediaDevices.getUserMedia({video:true}); document.getElementById('userCam').srcObject=s; } catch(e){}
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('talk-page').style.display = 'flex';
 
-  setStatus('Connecting...','#f59e0b');
-  const r=await fetch('/u/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId})});
-  const d=await r.json();
-  if(d.error){document.getElementById('lmsg').textContent='Error: '+d.error;setStatus('Error','#ef4444');return;}
+  // User's own camera in sidebar
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({video: true});
+    document.getElementById('userCam').srcObject = s;
+  } catch(e) {}
 
-  sessionId=d.session_id;
-  customerId=d.customer_id;
+  setStatus('Connecting...', '#f59e0b');
 
-  // Show iframe — ElevenLabs agent connector handles voice + video
-  document.getElementById('lmsg').style.display='none';
-  document.getElementById('avatarIframe').style.display='block';
-  setStatus('Connected','#4ade80');
+  try {
+    const r = await fetch('/u/session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({user_id: userId})});
+    const d = await r.json();
+    if (d.error) { document.getElementById('lmsg').textContent = 'Error: ' + d.error; setStatus('Error', '#ef4444'); return; }
+
+    sessionId  = d.session_id;
+    customerId = d.customer_id;
+    signedUrl  = d.signed_url;
+    elAgentId  = d.elevenlabs_agent_id;
+
+    document.getElementById('lmsg').textContent = 'Avatar ready — start voice to talk';
+    setStatus('Ready', '#4ade80');
+    document.getElementById('voiceBtn').disabled = false;
+
+  } catch(e) {
+    document.getElementById('lmsg').textContent = 'Connection error';
+    setStatus('Error', '#ef4444');
+  }
 }
 
-function setStatus(text,color){document.getElementById('sText').textContent=text;document.getElementById('sDot').style.background=color;}
+async function toggleVoice() {
+  if (!isVoiceConnected) {
+    await startVoice();
+  } else {
+    await stopVoice();
+  }
+}
 
-function addMsg(cls,who,text){if(!text)return;const log=document.getElementById('chatLog');log.innerHTML+=`<div class="msg ${cls}"><div class="who">${who}</div><div class="text">${text}</div></div>`;log.scrollTop=log.scrollHeight;}
-function renderHistory(history){const log=document.getElementById('chatLog');log.innerHTML='';history.forEach(m=>addMsg(m.speaker==='user'?'user':'avatar',m.speaker==='user'?'You':'Petar',m.text));}
+async function startVoice() {
+  setStatus('Connecting voice...', '#f59e0b');
+  document.getElementById('voiceBtn').disabled = true;
+
+  try {
+    await navigator.mediaDevices.getUserMedia({audio: true});
+
+    const { Conversation } = await import('https://cdn.jsdelivr.net/npm/@11labs/client@latest/dist/index.js');
+
+    conversation = await Conversation.startSession({
+      signedUrl: signedUrl || undefined,
+      agentId: signedUrl ? undefined : elAgentId,
+
+      onConnect: () => {
+        isVoiceConnected = true;
+        document.getElementById('voiceBtn').disabled = false;
+        document.getElementById('voiceBtn').classList.add('active');
+        document.getElementById('voiceBtnIcon').textContent = '⏹';
+        document.getElementById('voiceBtnText').textContent = 'End Voice';
+        setStatus('Live', '#4ade80');
+        document.getElementById('lmsg').style.display = 'none';
+      },
+
+      onDisconnect: () => {
+        isVoiceConnected = false;
+        conversation = null;
+        document.getElementById('voiceBtn').disabled = false;
+        document.getElementById('voiceBtn').classList.remove('active');
+        document.getElementById('voiceBtnIcon').textContent = '🎙';
+        document.getElementById('voiceBtnText').textContent = 'Start Voice';
+        setStatus('Ready', '#4ade80');
+      },
+
+      onMessage: (msg) => {
+        const isAgent = msg.type === 'agent_response';
+        const isUser  = msg.type === 'user_transcript';
+        if (isAgent || isUser) {
+          const text = msg.message || msg.text || '';
+          if (text) {
+            addMsg(isAgent ? 'avatar' : 'user', isAgent ? 'Petar' : 'You', text);
+            if (sessionId && customerId) {
+              fetch('/u/message', {method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({session_id: sessionId, customer_id: customerId,
+                  user_id: userId, speaker: isAgent ? 'avatar' : 'user', text})
+              }).catch(()=>{});
+            }
+          }
+        }
+      },
+
+      onError: (err) => {
+        console.error('ElevenLabs error:', err);
+        setStatus('Voice error', '#ef4444');
+        document.getElementById('voiceBtn').disabled = false;
+      }
+    });
+
+  } catch(e) {
+    setStatus('Could not start voice', '#ef4444');
+    document.getElementById('voiceBtn').disabled = false;
+    console.error(e);
+  }
+}
+
+async function stopVoice() {
+  if (conversation) await conversation.endSession();
+}
+
+function setStatus(text, color) {
+  document.getElementById('sText').textContent = text;
+  const dot = document.getElementById('sDot');
+  dot.style.background = color;
+  dot.style.animation = color === '#4ade80' ? 'blink 1.2s infinite' : 'none';
+}
+
+function addMsg(cls, who, text) {
+  if (!text) return;
+  const log = document.getElementById('chatLog');
+  log.innerHTML += `<div class="msg ${cls}"><div class="who">${who}</div><div class="text">${text}</div></div>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderHistory(history) {
+  const log = document.getElementById('chatLog');
+  log.innerHTML = '';
+  history.forEach(m => addMsg(m.speaker === 'user' ? 'user' : 'avatar', m.speaker === 'user' ? 'You' : 'Petar', m.text));
+}
 
 async function goBack() {
-  document.getElementById('avatarIframe').style.display='none';
-  document.getElementById('lmsg').style.display='block';
-  document.getElementById('lmsg').textContent='Connecting...';
-  document.getElementById('talk-page').style.display='none';
-  document.getElementById('landing').style.display='flex';
-  sessionId=null; customerId=null;
+  if (conversation) await conversation.endSession().catch(()=>{});
+  document.getElementById('talk-page').style.display = 'none';
+  document.getElementById('landing').style.display = 'flex';
+  document.getElementById('lmsg').style.display = 'block';
+  document.getElementById('lmsg').textContent = 'Connecting...';
+  sessionId = null; customerId = null; signedUrl = null;
+  isVoiceConnected = false; conversation = null;
+  document.getElementById('voiceBtn').disabled = true;
+  document.getElementById('voiceBtn').classList.remove('active');
+  document.getElementById('voiceBtnIcon').textContent = '🎙';
+  document.getElementById('voiceBtnText').textContent = 'Start Voice';
 }
 </script>
+
+<!-- D-ID embed — targets #vpanel for avatar face/video -->
 <script type="module"
-      src="https://agent.d-id.com/v2/index.js"
-      data-mode="fabio"
-      data-client-key="ck_9GCDUOVmW_bakvKO_Vw8e"
-      data-agent-id="v2_agt_jgKxLh3e"
-      data-name="did-agent"
-      data-monitor="true"
-      data-orientation="horizontal"
-      data-position="right"
-      data-open-mode="expanded">
-    </script>
+  src="https://agent.d-id.com/v2/index.js"
+  data-mode="fabio"
+  data-client-key="ck_9GCDUOVmW_bakvKO_Vw8e"
+  data-agent-id="v2_agt_jgKxLh3e"
+  data-name="did-agent"
+  data-monitor="true"
+  data-orientation="horizontal"
+  data-position="right"
+  data-open-mode="expanded">
+</script>
 </body>
 </html>
