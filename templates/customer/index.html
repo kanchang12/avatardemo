@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>My Avatar — TRIONE</title>
-<script src="https://cdn.jsdelivr.net/npm/@d-id/client-sdk-browser@1/dist/index.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;flex-direction:column}
@@ -14,10 +13,8 @@ nav h1{color:#a78bfa;font-size:1.05rem;letter-spacing:2px;flex:1}
 nav a{color:#888;font-size:0.8rem;text-decoration:none;padding:5px 14px;border:1px solid #2e2e4e;border-radius:14px}
 nav a:hover{border-color:#a78bfa;color:#a78bfa}
 .layout{display:flex;flex:1;overflow:hidden;height:calc(100vh - 50px)}
-.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center}
-#avatarVideo{width:100%;height:100%;object-fit:cover;display:none}
-.loading{color:#555;position:absolute}
-.side{width:400px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column;overflow:hidden}
+.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center;min-height:0}
+.side{width:400px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
 .status-section{padding:12px 16px;border-bottom:1px solid #1e1e2e;flex-shrink:0;display:flex;align-items:center;gap:8px}
 .sdot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0}
 .stext{font-size:0.8rem;color:#888;flex:1}
@@ -63,12 +60,12 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
   <div class="pill" id="kCount">Loading...</div>
   <a href="/customer/logout">Sign out</a>
 </nav>
+
 <div class="layout">
-  <div class="vpanel" id="vpanel"></div> 
-  
-  <div class="side">
-    </div>
-</div>
+  <!-- Avatar panel — D-ID embed targets this div -->
+  <div class="vpanel" id="vpanel"></div>
+
+  <!-- Sidebar — single, inside layout -->
   <div class="side">
     <div class="status-section">
       <div class="sdot" id="sDot"></div>
@@ -88,110 +85,174 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
     </div>
   </div>
 </div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-let sessionId=null, customerId=null, didAgent=null;
+let sessionId = null, customerId = null;
 
 async function init() {
   setStatus('Getting session...', '#f59e0b');
-  
-  const r = await fetch('/customer/session', {
-      method: 'POST', 
+
+  try {
+    const r = await fetch('/customer/session', {
+      method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({})
-  });
-  
-  const d = await r.json();
-  
-  // STOP here if there is an error
-  if(r.status !== 200 || d.error) {
-    const errorMsg = d.error || 'Server Error';
-    console.error('Session failed:', errorMsg);
-    setStatus('Error: ' + errorMsg, '#ef4444');
-    return; // This prevents the TypeError below
+    });
+
+    const d = await r.json();
+
+    if (!r.ok || d.error) {
+      setStatus('Error: ' + (d.error || 'Server error'), '#ef4444');
+      console.error('Session error:', d.error);
+      return;
+    }
+
+    sessionId  = d.session_id;
+    customerId = d.customer_id;
+
+    document.getElementById('kCount').textContent = d.knowledge_count + ' chunks';
+    renderEgo(d.ego_model, d.persona);
+    loadKnowledge();
+    loadSessions();
+    setStatus('Avatar Active', '#4ade80');
+
+  } catch (e) {
+    setStatus('Connection error', '#ef4444');
+    console.error('Init failed:', e);
   }
-
-  // Only proceed if everything is successful
-  sessionId = d.session_id; 
-  document.getElementById('kCount').textContent = d.knowledge_count + ' chunks';
-  renderEgo(d.ego_model, d.persona);
-  loadKnowledge(); 
-  loadSessions();
-
-  setStatus('Avatar Active', '#4ade80');
 }
+
 async function trainText(text) {
-  if(!text.trim()||!sessionId)return;
-  const r=await fetch('/customer/train',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({text,session_id:sessionId,context:'voice conversation with own avatar'})});
-  const d=await r.json();
-  if(d.chunks_added>0||d.beliefs_extracted>0){
+  if (!text.trim() || !sessionId) return;
+  const r = await fetch('/customer/train', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({text, session_id: sessionId, context: 'voice conversation with own avatar'})
+  });
+  const d = await r.json();
+  if (d.chunks_added > 0 || d.beliefs_extracted > 0) {
     showToast(`EGO updated: +${d.chunks_added} chunks, +${d.beliefs_extracted} beliefs`);
-    setTimeout(()=>{loadKnowledge();},2500);
+    setTimeout(() => { loadKnowledge(); }, 2500);
   }
 }
 
 async function trainManual() {
-  const text=document.getElementById('trainText').value.trim();
-  if(!text)return;
-  document.getElementById('trainText').value='';
+  const text = document.getElementById('trainText').value.trim();
+  if (!text) return;
+  document.getElementById('trainText').value = '';
   await trainText(text);
 }
 
 async function loadKnowledge() {
-  const r=await fetch('/customer/knowledge');
-  const chunks=await r.json();
-  document.getElementById('kCount').textContent=chunks.length+' chunks';
-  const el=document.getElementById('tab-knowledge');
-  if(!chunks.length){el.innerHTML='<p class="empty">Talk to your avatar — everything you share builds your knowledge base.</p>';return;}
-  el.innerHTML=chunks.map(c=>`<div class="chunk"><div class="cat ${c.ego_layer==='ego'?'ego':'raw'}">${c.ego_layer==='ego'?'⚡ EGO':'📝 RAW'} · ${c.category}</div><div class="text">${c.chunk}</div><button class="del" onclick="delChunk(${c.id},this)">✕</button></div>`).join('');
+  const r = await fetch('/customer/knowledge');
+  const chunks = await r.json();
+  document.getElementById('kCount').textContent = chunks.length + ' chunks';
+  const el = document.getElementById('tab-knowledge');
+  if (!chunks.length) {
+    el.innerHTML = '<p class="empty">Talk to your avatar — everything you share builds your knowledge base.</p>';
+    return;
+  }
+  el.innerHTML = chunks.map(c =>
+    `<div class="chunk">
+       <div class="cat ${c.ego_layer === 'ego' ? 'ego' : 'raw'}">${c.ego_layer === 'ego' ? '⚡ EGO' : '📝 RAW'} · ${c.category}</div>
+       <div class="text">${c.chunk}</div>
+       <button class="del" onclick="delChunk(${c.id},this)">✕</button>
+     </div>`
+  ).join('');
 }
 
 async function loadEgo() {
-  const r=await fetch('/customer/ego');
-  const d=await r.json();
+  const r = await fetch('/customer/ego');
+  const d = await r.json();
   renderEgo(d.ego, d.summary);
 }
 
 function renderEgo(ego, persona) {
-  const el=document.getElementById('tab-ego');
-  if(!ego&&!persona){el.innerHTML='<p class="empty">Your EGO model will be built here as you talk to your avatar.<br><br>Every conversation teaches it who you are.</p>';return;}
-  let html='';
-  if(persona) html+=`<div class="persona-box">${persona}</div>`;
-  const bCount=(ego?.beliefs||[]).length, vCount=(ego?.values||[]).length;
-  const rCount=Object.keys(ego?.relationships||{}).length, pCount=(ego?.reasoning_patterns||[]).length;
-  html+=`<div class="stat-row"><div class="stat-chip"><div class="n">${bCount}</div><div class="l">Beliefs</div></div><div class="stat-chip"><div class="n">${vCount}</div><div class="l">Values</div></div><div class="stat-chip"><div class="n">${rCount}</div><div class="l">Relations</div></div><div class="stat-chip"><div class="n">${pCount}</div><div class="l">Patterns</div></div></div>`;
-  if(ego?.beliefs?.length) html+=`<div class="ego-section"><h4>Core Beliefs</h4><ul>${ego.beliefs.slice(0,8).map(b=>`<li>${b}</li>`).join('')}</ul></div>`;
-  if(ego?.values?.length) html+=`<div class="ego-section"><h4>Values</h4><ul>${ego.values.slice(0,6).map(v=>`<li>${v}</li>`).join('')}</ul></div>`;
-  if(ego?.reasoning_patterns?.length) html+=`<div class="ego-section"><h4>How They Think</h4><ul>${ego.reasoning_patterns.slice(0,5).map(p=>`<li>${p}</li>`).join('')}</ul></div>`;
-  if(ego?.relationships&&Object.keys(ego.relationships).length) html+=`<div class="ego-section"><h4>Relationships</h4>${Object.entries(ego.relationships).slice(0,8).map(([p,d])=>`<div class="ego-rel"><strong>${p}:</strong> ${d}</div>`).join('')}</div>`;
-  if(ego?.contradictions?.length) html+=`<div class="ego-section"><h4>Growth & Contradictions</h4><ul>${ego.contradictions.slice(0,4).map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
-  el.innerHTML=html;
+  const el = document.getElementById('tab-ego');
+  if (!ego && !persona) {
+    el.innerHTML = '<p class="empty">Your EGO model will be built here as you talk to your avatar.<br><br>Every conversation teaches it who you are.</p>';
+    return;
+  }
+  let html = '';
+  if (persona) html += `<div class="persona-box">${persona}</div>`;
+  const bCount = (ego?.beliefs || []).length;
+  const vCount = (ego?.values || []).length;
+  const rCount = Object.keys(ego?.relationships || {}).length;
+  const pCount = (ego?.reasoning_patterns || []).length;
+  html += `<div class="stat-row">
+    <div class="stat-chip"><div class="n">${bCount}</div><div class="l">Beliefs</div></div>
+    <div class="stat-chip"><div class="n">${vCount}</div><div class="l">Values</div></div>
+    <div class="stat-chip"><div class="n">${rCount}</div><div class="l">Relations</div></div>
+    <div class="stat-chip"><div class="n">${pCount}</div><div class="l">Patterns</div></div>
+  </div>`;
+  if (ego?.beliefs?.length)
+    html += `<div class="ego-section"><h4>Core Beliefs</h4><ul>${ego.beliefs.slice(0,8).map(b=>`<li>${b}</li>`).join('')}</ul></div>`;
+  if (ego?.values?.length)
+    html += `<div class="ego-section"><h4>Values</h4><ul>${ego.values.slice(0,6).map(v=>`<li>${v}</li>`).join('')}</ul></div>`;
+  if (ego?.reasoning_patterns?.length)
+    html += `<div class="ego-section"><h4>How They Think</h4><ul>${ego.reasoning_patterns.slice(0,5).map(p=>`<li>${p}</li>`).join('')}</ul></div>`;
+  if (ego?.relationships && Object.keys(ego.relationships).length)
+    html += `<div class="ego-section"><h4>Relationships</h4>${Object.entries(ego.relationships).slice(0,8).map(([p,d])=>`<div class="ego-rel"><strong>${p}:</strong> ${d}</div>`).join('')}</div>`;
+  if (ego?.contradictions?.length)
+    html += `<div class="ego-section"><h4>Growth & Contradictions</h4><ul>${ego.contradictions.slice(0,4).map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
+  el.innerHTML = html;
 }
 
 async function loadSessions() {
-  const r=await fetch('/customer/sessions');
-  const sessions=await r.json();
-  const el=document.getElementById('tab-sessions');
-  if(!sessions.length){el.innerHTML='<p class="empty">No sessions yet.</p>';return;}
-  el.innerHTML=sessions.map(s=>`<div class="sitem"><div><div class="stype">${s.session_type==='customer_training'?'🎓 Training':'💬 User chat'}</div><div class="sdate">${s.started_at?s.started_at.slice(0,16):''}</div></div><div class="scount">${s.message_count} msgs</div></div>`).join('');
+  const r = await fetch('/customer/sessions');
+  const sessions = await r.json();
+  const el = document.getElementById('tab-sessions');
+  if (!sessions.length) { el.innerHTML = '<p class="empty">No sessions yet.</p>'; return; }
+  el.innerHTML = sessions.map(s =>
+    `<div class="sitem">
+       <div>
+         <div class="stype">${s.session_type === 'customer_training' ? '🎓 Training' : '💬 User chat'}</div>
+         <div class="sdate">${s.started_at ? s.started_at.slice(0,16) : ''}</div>
+       </div>
+       <div class="scount">${s.message_count} msgs</div>
+     </div>`
+  ).join('');
 }
 
-async function delChunk(id,btn){await fetch(`/customer/knowledge/${id}`,{method:'DELETE'});btn.closest('.chunk').remove();}
-function switchTab(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));el.classList.add('active');document.getElementById('tab-'+name).classList.add('active');if(name==='ego')loadEgo();}
-function setStatus(text,color){document.getElementById('sText').textContent=text;document.getElementById('sDot').style.background=color;}
-function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
-setInterval(()=>{if(sessionId)loadKnowledge();},30000);
+async function delChunk(id, btn) {
+  await fetch(`/customer/knowledge/${id}`, {method: 'DELETE'});
+  btn.closest('.chunk').remove();
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'ego') loadEgo();
+}
+
+function setStatus(text, color) {
+  document.getElementById('sText').textContent = text;
+  document.getElementById('sDot').style.background = color;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+setInterval(() => { if (sessionId) loadKnowledge(); }, 30000);
 init();
 </script>
+
+<!-- D-ID embed — must come after #vpanel exists in DOM -->
 <script type="module"
-      src="https://agent.d-id.com/v2/index.js"
-      data-mode="full"
-      data-client-key="ck_9GCDUOVmW_bakvKO_Vw8e"
-      data-agent-id="v2_agt_jgKxLh3e"
-      data-monitor="true"
-      data-target-id="vpanel">
+  src="https://agent.d-id.com/v2/index.js"
+  data-mode="full"
+  data-client-key="ck_9GCDUOVmW_bakvKO_Vw8e"
+  data-agent-id="v2_agt_jgKxLh3e"
+  data-monitor="true"
+  data-target-id="vpanel">
 </script>
 </body>
 </html>
