@@ -7,7 +7,11 @@
 <!-- LiveAvatar Web SDK -->
 <script type="module">
 import { LiveAvatarSession } from "https://esm.sh/@heygen/liveavatar-web-sdk@0.0.18";
+import { Room, RoomEvent, Track } from "https://esm.sh/livekit-client@2";
 window.LiveAvatarSession = LiveAvatarSession;
+window.LiveKitRoom = Room;
+window.LiveKitRoomEvent = RoomEvent;
+window.LiveKitTrack = Track;
 </script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -149,6 +153,24 @@ function skipCamera() {
   launchSession();
 }
 
+async function connectLiveKit(url, token) {
+  const Room = window.LiveKitRoom;
+  const RoomEvent = window.LiveKitRoomEvent;
+  const Track = window.LiveKitTrack;
+  if(!Room) { console.error('LiveKit not loaded'); return; }
+  const room = new Room();
+  room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    if(track.kind === Track.Kind.Video) {
+      const el = track.attach();
+      el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+      const c = document.getElementById('avatarContainer');
+      c.innerHTML = '';
+      c.appendChild(el);
+    }
+  });
+  await room.connect(url, token);
+}
+
 async function launchSession() {
   document.getElementById('landing').style.display='none';
   document.getElementById('talk-page').style.display='flex';
@@ -173,16 +195,17 @@ async function launchSession() {
 
   setStatus('Starting avatar...','#f59e0b');
 
-  liveAvatarSession = new LiveAvatarSession(d.session_token, {
-    voiceChat: true,
-    container: document.getElementById('avatarContainer'),
-  });
+  liveAvatarSession = new LiveAvatarSession(d.session_token, {voiceChat: true});
 
   liveAvatarSession.on('session.started', () => {
     setStatus('Connected','#4ade80');
     document.getElementById('lmsg').style.display='none';
-    document.getElementById('avatarContainer').style.display='block';
   });
+
+  // Connect LiveKit for video using backend-provided credentials
+  if(d.livekit_url && d.livekit_client_token) {
+    connectLiveKit(d.livekit_url, d.livekit_client_token);
+  }
 
   liveAvatarSession.on('avatar.speak_started', () => setStatus('Petar speaking...','#f59e0b'));
   liveAvatarSession.on('avatar.speak_ended', () => setStatus('Listening','#4ade80'));
