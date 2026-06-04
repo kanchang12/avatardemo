@@ -111,7 +111,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 </div>
 
 <script type="module">
-import { createSession, SessionModeEnum, AgentEventsEnum } from 'https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/+esm';
+import { LiveAvatarSession } from 'https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/+esm';
 
 let camStream = null, userId = null, sessionId = null, customerId = null;
 let liveSession = null;
@@ -167,28 +167,22 @@ async function launchSession() {
     const la = d.la_session;
     document.getElementById('lmsg').style.display = 'none';
 
-    liveSession = await createSession({
-      token: la.token || la.access_token || la.livekit_token,
-      serverUrl: la.server_url || la.livekit_url || la.url,
-      container: document.getElementById('avatarContainer'),
-      mode: SessionModeEnum.LITE,
+    const token = la.token || la.access_token || la.livekit_token || la.session_token;
+    liveSession = new LiveAvatarSession(token, { voiceChat: true });
+
+    liveSession.on('connected', () => setStatus('Live', '#4ade80'));
+    liveSession.on('disconnected', () => setStatus('Disconnected', '#ef4444'));
+    liveSession.on('agent_response', (data) => {
+      const text = data?.text || data?.agent_response || '';
+      if (text) { addMsg('avatar', 'Petar', text); saveMsg('avatar', text); }
+    });
+    liveSession.on('user_transcript', (data) => {
+      const text = data?.text || data?.user_transcript || '';
+      if (text) { addMsg('user', 'You', text); saveMsg('user', text); }
     });
 
-    liveSession.on(AgentEventsEnum.CONNECTED, () => setStatus('Connected', '#4ade80'));
-    liveSession.on(AgentEventsEnum.DISCONNECTED, () => setStatus('Disconnected', '#ef4444'));
-
-    liveSession.on(AgentEventsEnum.ELEVENLABS_AGENT_EVENT, (evt) => {
-      if (evt.elevenlabs_event_type === 'agent_response' && evt.data?.agent_response) {
-        addMsg('avatar', 'Petar', evt.data.agent_response);
-        saveMsg('avatar', evt.data.agent_response);
-      }
-      if (evt.elevenlabs_event_type === 'user_transcript' && evt.data?.user_transcript) {
-        addMsg('user', 'You', evt.data.user_transcript);
-        saveMsg('user', evt.data.user_transcript);
-      }
-    });
-
-    await liveSession.connect();
+    const container = document.getElementById('avatarContainer');
+    await liveSession.start(container);
     setStatus('Live', '#4ade80');
 
   } catch(e) {
@@ -226,7 +220,7 @@ function renderHistory(history) {
 }
 
 window.goBack = async function() {
-  if (liveSession) { try { await liveSession.disconnect(); } catch(e) {} liveSession = null; }
+  if (liveSession) { try { await liveSession.stop(); } catch(e) {} liveSession = null; }
   document.getElementById('talk-page').style.display = 'none';
   document.getElementById('landing').style.display = 'flex';
   document.getElementById('lmsg').style.display = 'block';
