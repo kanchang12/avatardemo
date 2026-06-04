@@ -120,6 +120,7 @@ def get_first_customer(db):
         return cur.fetchone()
 
 def liveavatar_session_token(avatar_id, elevenlabs_secret_id, elevenlabs_agent_id):
+    # Step 1: Create session token
     r = requests.post(
         "https://api.liveavatar.com/v1/sessions/token",
         headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
@@ -134,9 +135,24 @@ def liveavatar_session_token(avatar_id, elevenlabs_secret_id, elevenlabs_agent_i
     )
     if r.status_code not in [200, 201]:
         return None, r.text
-    data = r.json()
-    token = data.get("data", {}).get("session_token") or data.get("session_token")
-    return token, None
+    token = r.json().get("data", {}).get("session_token") or r.json().get("session_token")
+    if not token:
+        return None, f"No session_token in response: {r.text}"
+
+    # Step 2: Start session to get LiveKit credentials
+    r2 = requests.post(
+        "https://api.liveavatar.com/v1/sessions/start",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    )
+    if r2.status_code not in [200, 201]:
+        return None, r2.text
+    data = r2.json().get("data", {})
+    return {
+        "session_token": token,
+        "session_id": data.get("session_id"),
+        "livekit_url": data.get("livekit_url"),
+        "livekit_client_token": data.get("livekit_client_token")
+    }, None
 
 def gemini(prompt, system=None):
     if not GEMINI_API_KEY: return ""
@@ -331,12 +347,14 @@ def user_session():
     if not avatar_id or not secret_id or not agent_id:
         return jsonify({"error": "Avatar not fully configured. Set avatar_id, elevenlabs_secret_id and elevenlabs_agent_id in admin panel."}), 500
 
-    token, err = liveavatar_session_token(avatar_id, secret_id, agent_id)
+    lk, err = liveavatar_session_token(avatar_id, secret_id, agent_id)
     if err:
         return jsonify({"error": err}), 500
 
     return jsonify({
-        "session_token": token,
+        "session_token": lk.get("session_token"),
+        "livekit_url": lk.get("livekit_url"),
+        "livekit_client_token": lk.get("livekit_client_token"),
         "session_id": session_id,
         "customer_id": customer["id"],
         "customer_name": customer["name"],
@@ -403,9 +421,9 @@ def customer_session():
     secret_id = (customer["elevenlabs_secret_id"] or "").strip()
     agent_id  = (customer["elevenlabs_agent_id"] or "").strip() or ELEVENLABS_AGENT_ID
 
-    token = None
+    lk = None
     if avatar_id and secret_id and agent_id:
-        token, err = liveavatar_session_token(avatar_id, secret_id, agent_id)
+        lk, err = liveavatar_session_token(avatar_id, secret_id, agent_id)
         if err:
             return jsonify({"error": err}), 500
 
@@ -419,7 +437,9 @@ def customer_session():
         except: pass
 
     return jsonify({
-        "session_token": token,
+        "session_token": lk.get("session_token") if lk else None,
+        "livekit_url": lk.get("livekit_url") if lk else None,
+        "livekit_client_token": lk.get("livekit_client_token") if lk else None,
         "session_id": session_id,
         "customer_id": customer["id"],
         "knowledge_count": knowledge_count,
