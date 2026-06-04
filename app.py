@@ -133,7 +133,10 @@ def liveavatar_create_session(avatar_id=None, elevenlabs_secret_id=None, agent_i
     el_agent = agent_id or ELEVENLABS_AGENT_ID
     el_secret = elevenlabs_secret_id or ""
 
-    payload = {
+    headers = {"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"}
+
+    # Step 1 — create session token
+    token_payload = {
         "mode": "LITE",
         "avatar_id": aid,
         "elevenlabs_agent_config": {
@@ -141,15 +144,36 @@ def liveavatar_create_session(avatar_id=None, elevenlabs_secret_id=None, agent_i
             "agent_id": el_agent
         }
     }
-    r = requests.post(
-        "https://api.liveavatar.com/v1/sessions",
-        headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
-        json=payload,
+    r1 = requests.post(
+        "https://api.liveavatar.com/v1/sessions/token",
+        headers=headers,
+        json=token_payload,
         timeout=15
     )
-    if r.status_code not in (200, 201):
-        return None, f"LiveAvatar error {r.status_code}: {r.text}"
-    return r.json(), None
+    if r1.status_code not in (200, 201):
+        return None, f"LiveAvatar token error {r1.status_code}: {r1.text}"
+    token_data = r1.json().get("data", r1.json())
+    session_token = token_data.get("session_token") or token_data.get("token")
+    if not session_token:
+        return None, f"No session_token in response: {r1.text}"
+
+    # Step 2 — start session
+    r2 = requests.post(
+        "https://api.liveavatar.com/v1/sessions/start",
+        headers={"Authorization": f"Bearer {session_token}", "Content-Type": "application/json"},
+        json={},
+        timeout=15
+    )
+    if r2.status_code not in (200, 201):
+        return None, f"LiveAvatar start error {r2.status_code}: {r2.text}"
+    session_data = r2.json().get("data", r2.json())
+    return {
+        "session_token": session_token,
+        "session_id": session_data.get("session_id"),
+        "livekit_url": session_data.get("livekit_url"),
+        "livekit_client_token": session_data.get("livekit_client_token"),
+        "ws_url": session_data.get("ws_url"),
+    }, None
 
 # ── Gemini ────────────────────────────────────────────────────────────────────
 
