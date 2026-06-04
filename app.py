@@ -127,7 +127,7 @@ def did_create_session(agent_id=None):
         return None, "Missing DID_AGENT_ID"
 
     headers = {
-        "Authorization": f"Bearer {DID_API_KEY.strip()}",
+        "Authorization": DID_API_KEY.strip(),
         "Content-Type": "application/json",
         "accept": "application/json"
     }
