@@ -126,8 +126,11 @@ def did_create_session(agent_id=None):
     if not aid:
         return None, "Missing DID_AGENT_ID"
 
+    raw = f"{DID_API_KEY.strip()}"
+    encoded = base64.b64encode(raw.encode()).decode()
+
     headers = {
-        "Authorization": DID_API_KEY.strip(),
+        "Authorization": f"Basic {encoded}",
         "Content-Type": "application/json",
         "accept": "application/json"
     }
