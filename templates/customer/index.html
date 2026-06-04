@@ -13,18 +13,9 @@ nav h1{color:#a78bfa;font-size:1.05rem;letter-spacing:2px;flex:1}
 nav a{color:#888;font-size:0.8rem;text-decoration:none;padding:5px 14px;border:1px solid #2e2e4e;border-radius:14px}
 nav a:hover{border-color:#a78bfa;color:#a78bfa}
 .layout{display:flex;flex:1;overflow:hidden;height:calc(100vh - 50px)}
-.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}
-.avatar-ring{width:200px;height:200px;border-radius:50%;border:3px solid #2e2e4e;overflow:hidden;position:relative;flex-shrink:0}
-.avatar-ring img{width:100%;height:100%;object-fit:cover;display:block}
-.avatar-ring .pulse{position:absolute;inset:0;border-radius:50%;border:3px solid #a78bfa;opacity:0;pointer-events:none}
-.avatar-ring.speaking .pulse{animation:pulse 1.2s ease-in-out infinite}
-@keyframes pulse{0%{transform:scale(1);opacity:0.8}100%{transform:scale(1.2);opacity:0}}
-.voice-btn{display:flex;align-items:center;gap:10px;background:#a78bfa;color:#fff;border:none;border-radius:50px;padding:13px 30px;font-size:0.95rem;cursor:pointer;font-weight:600;transition:background 0.2s}
-.voice-btn:hover{background:#9061f9}
-.voice-btn:disabled{background:#2e2e4e;cursor:not-allowed;color:#555}
-.voice-btn.active{background:#ef4444}
-.voice-btn.active:hover{background:#dc2626}
-.transcript{max-width:400px;text-align:center;font-size:0.85rem;color:#888;line-height:1.6;min-height:44px;padding:0 20px}
+.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center}
+#avatarContainer{width:100%;height:100%}
+.lmsg{position:absolute;color:#555;font-size:0.9rem}
 .side{width:400px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
 .status-section{padding:12px 16px;border-bottom:1px solid #1e1e2e;flex-shrink:0;display:flex;align-items:center;gap:8px}
 .sdot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0}
@@ -73,20 +64,10 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 </nav>
 
 <div class="layout">
-  <!-- LEFT: D-ID avatar face + ElevenLabs voice controls -->
   <div class="vpanel">
-    <div class="avatar-ring" id="avatarRing">
-      <img src="/avatar/thumbnail" onerror="this.style.display='none'" alt="Avatar">
-      <div class="pulse"></div>
-    </div>
-    <button class="voice-btn" id="voiceBtn" onclick="toggleConversation()" disabled>
-      <span id="voiceBtnIcon">🎙</span>
-      <span id="voiceBtnText">Start Conversation</span>
-    </button>
-    <div class="transcript" id="transcript">Initialising...</div>
+    <p class="lmsg" id="lmsg">Connecting...</p>
+    <div id="avatarContainer"></div>
   </div>
-
-  <!-- RIGHT: EGO / Knowledge / Sessions sidebar -->
   <div class="side">
     <div class="status-section">
       <div class="sdot" id="sDot"></div>
@@ -106,206 +87,67 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
     </div>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
 
-<script>
-let sessionId = null, customerId = null, signedUrl = null, elAgentId = null;
-let conversation = null, isConnected = false;
+<script type="module">
+import { createSession, SessionModeEnum, AgentEventsEnum } from 'https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/+esm';
+
+let sessionId = null, customerId = null, liveSession = null;
 
 async function init() {
-  setStatus('Getting session...', '#f59e0b');
-  setTranscript('Connecting...');
-
+  setStatus('Connecting...', '#f59e0b');
   try {
-    const r = await fetch('/customer/session', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({})
-    });
+    const r = await fetch('/customer/session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
     const d = await r.json();
+    if (!r.ok || d.error) { setStatus('Error: ' + (d.error || 'Server error'), '#ef4444'); return; }
 
-    if (!r.ok || d.error) {
-      setStatus('Error: ' + (d.error || 'Server error'), '#ef4444');
-      setTranscript('Failed to connect. Please refresh.');
-      return;
-    }
-
-    sessionId   = d.session_id;
-    customerId  = d.customer_id;
-    signedUrl   = d.signed_url;
-    elAgentId   = d.elevenlabs_agent_id;
-
+    sessionId  = d.session_id;
+    customerId = d.customer_id;
     document.getElementById('kCount').textContent = d.knowledge_count + ' chunks';
     renderEgo(d.ego_model, d.persona);
     loadKnowledge();
     loadSessions();
 
-    setStatus('Ready', '#4ade80');
-    setTranscript('Click "Start Conversation" to talk to your avatar.');
-    document.getElementById('voiceBtn').disabled = false;
+    const la = d.la_session;
+    document.getElementById('lmsg').style.display = 'none';
 
-  } catch (e) {
-    setStatus('Connection error', '#ef4444');
-    setTranscript('Network error. Please refresh.');
-    console.error('Init failed:', e);
-  }
-}
+    liveSession = await createSession({
+      token: la.token || la.access_token || la.livekit_token,
+      serverUrl: la.server_url || la.livekit_url || la.url,
+      container: document.getElementById('avatarContainer'),
+      mode: SessionModeEnum.LITE,
+    });
 
-async function toggleConversation() {
-  if (!isConnected) {
-    await startConversation();
-  } else {
-    await stopConversation();
-  }
-}
+    liveSession.on(AgentEventsEnum.CONNECTED, () => setStatus('Live', '#4ade80'));
+    liveSession.on(AgentEventsEnum.DISCONNECTED, () => setStatus('Disconnected', '#ef4444'));
 
-async function startConversation() {
-  setStatus('Connecting voice...', '#f59e0b');
-  document.getElementById('voiceBtn').disabled = true;
+    liveSession.on(AgentEventsEnum.ELEVENLABS_AGENT_EVENT, (evt) => {
+      if (evt.elevenlabs_event_type === 'user_transcript' && evt.data?.user_transcript) {
+        trainText(evt.data.user_transcript);
+      }
+    });
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const wsUrl = signedUrl || `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${elAgentId}`;
-    const ws = new WebSocket(wsUrl);
-    conversation = ws;
+    await liveSession.connect();
+    setStatus('Live', '#4ade80');
 
-    // Audio context for playback
-    const audioCtx = new AudioContext({ sampleRate: 16000 });
-    const audioQueue = [];
-    let isPlaying = false;
-
-    async function playNext() {
-      if (isPlaying || audioQueue.length === 0) return;
-      isPlaying = true;
-      const pcm = audioQueue.shift();
-      const buf = audioCtx.createBuffer(1, pcm.length, 16000);
-      buf.copyToChannel(pcm, 0);
-      const src = audioCtx.createBufferSource();
-      src.buffer = buf;
-      src.connect(audioCtx.destination);
-      src.onended = () => { isPlaying = false; playNext();
-        document.getElementById('avatarRing').classList.remove('speaking'); };
-      src.start();
-      document.getElementById('avatarRing').classList.add('speaking');
-    }
-
-    // Mic capture → send PCM to WS
-    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-    const processor = { stream, mediaRecorder };
-    conversation._processor = processor;
-
-    ws.onopen = () => {
-      isConnected = true;
-      document.getElementById('voiceBtn').disabled = false;
-      document.getElementById('voiceBtn').classList.add('active');
-      document.getElementById('voiceBtnIcon').textContent = '⏹';
-      document.getElementById('voiceBtnText').textContent = 'End Conversation';
-      setStatus('Live', '#4ade80');
-      // Send init message
-      ws.send(JSON.stringify({ type: 'conversation_initiation_client_data' }));
-      // Start mic
-      mediaRecorder.ondataavailable = async (e) => {
-        if (ws.readyState !== 1 || !e.data.size) return;
-        const ab = await e.data.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
-        ws.send(JSON.stringify({ user_audio_chunk: b64 }));
-      };
-      mediaRecorder.start(250);
-    };
-
-    ws.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data);
-        if (msg.type === 'audio' && msg.audio_event?.audio_base_64) {
-          const raw = atob(msg.audio_event.audio_base_64);
-          const pcm = new Float32Array(raw.length / 2);
-          for (let i = 0; i < pcm.length; i++) {
-            const lo = raw.charCodeAt(i * 2);
-            const hi = raw.charCodeAt(i * 2 + 1);
-            const s = (hi << 8) | lo;
-            pcm[i] = s >= 32768 ? (s - 65536) / 32768 : s / 32768;
-          }
-          audioQueue.push(pcm);
-          playNext();
-        }
-        if (msg.type === 'agent_response' && msg.agent_response_event?.agent_response) {
-          const text = msg.agent_response_event.agent_response;
-          setTranscript('Avatar: ' + text);
-          saveMessage('avatar', text);
-        }
-        if (msg.type === 'user_transcript' && msg.user_transcription_event?.user_transcript) {
-          const text = msg.user_transcription_event.user_transcript;
-          setTranscript('You: ' + text);
-          saveMessage('user', text);
-          trainText(text);
-        }
-      } catch(e) {}
-    };
-
-    ws.onclose = () => {
-      isConnected = false;
-      conversation = null;
-      stream.getTracks().forEach(t => t.stop());
-      document.getElementById('voiceBtn').disabled = false;
-      document.getElementById('voiceBtn').classList.remove('active');
-      document.getElementById('avatarRing').classList.remove('speaking');
-      document.getElementById('voiceBtnIcon').textContent = '🎙';
-      document.getElementById('voiceBtnText').textContent = 'Start Conversation';
-      setStatus('Ready', '#4ade80');
-      setTranscript('Conversation ended. Click to start again.');
-      setTimeout(() => loadKnowledge(), 3000);
-    };
-
-    ws.onerror = (err) => {
-      console.error('WS error:', err);
-      setStatus('Error', '#ef4444');
-      setTranscript('Connection error.');
-      document.getElementById('voiceBtn').disabled = false;
-    };
-
-  } catch (e) {
-    setStatus('Error', '#ef4444');
-    setTranscript('Could not start: ' + e.message);
-    document.getElementById('voiceBtn').disabled = false;
+  } catch(e) {
+    setStatus('Error: ' + e.message, '#ef4444');
     console.error(e);
   }
-}
-async function stopConversation() {
-  if (conversation) {
-    if (conversation._processor) {
-      conversation._processor.mediaRecorder.stop();
-      conversation._processor.stream.getTracks().forEach(t => t.stop());
-    }
-    conversation.close();
-    conversation = null;
-  }
-}age(speaker, text) {
-  try {
-    await fetch('/u/message', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ session_id: sessionId, customer_id: customerId, speaker, text })
-    });
-  } catch(e) {}
 }
 
 async function trainText(text) {
   if (!text.trim() || !sessionId) return;
   try {
-    const r = await fetch('/customer/train', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ text, session_id: sessionId, context: 'voice conversation with own avatar' })
-    });
+    const r = await fetch('/customer/train', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text, session_id: sessionId, context: 'voice conversation with own avatar'})});
     const d = await r.json();
-    if (d.chunks_added > 0 || d.beliefs_extracted > 0) {
+    if (d.chunks_added > 0 || d.beliefs_extracted > 0)
       showToast(`EGO updated: +${d.chunks_added} chunks, +${d.beliefs_extracted} beliefs`);
-    }
   } catch(e) {}
 }
 
-async function trainManual() {
+window.trainManual = async function() {
   const text = document.getElementById('trainText').value.trim();
   if (!text) return;
   document.getElementById('trainText').value = '';
@@ -318,16 +160,9 @@ async function loadKnowledge() {
   const chunks = await r.json();
   document.getElementById('kCount').textContent = chunks.length + ' chunks';
   const el = document.getElementById('tab-knowledge');
-  if (!chunks.length) {
-    el.innerHTML = '<p class="empty">Talk to your avatar — everything you share builds your knowledge base.</p>';
-    return;
-  }
+  if (!chunks.length) { el.innerHTML = '<p class="empty">Talk to your avatar — everything you share builds your knowledge base.</p>'; return; }
   el.innerHTML = chunks.map(c =>
-    `<div class="chunk">
-       <div class="cat ${c.ego_layer === 'ego' ? 'ego' : 'raw'}">${c.ego_layer === 'ego' ? '⚡ EGO' : '📝 RAW'} · ${c.category}</div>
-       <div class="text">${c.chunk}</div>
-       <button class="del" onclick="delChunk(${c.id},this)">✕</button>
-     </div>`
+    `<div class="chunk"><div class="cat ${c.ego_layer==='ego'?'ego':'raw'}">${c.ego_layer==='ego'?'⚡ EGO':'📝 RAW'} · ${c.category}</div><div class="text">${c.chunk}</div><button class="del" onclick="delChunk(${c.id},this)">✕</button></div>`
   ).join('');
 }
 
@@ -339,32 +174,17 @@ async function loadEgo() {
 
 function renderEgo(ego, persona) {
   const el = document.getElementById('tab-ego');
-  if (!ego && !persona) {
-    el.innerHTML = '<p class="empty">Your EGO model will be built here as you talk to your avatar.<br><br>Every conversation teaches it who you are.</p>';
-    return;
-  }
+  if (!ego && !persona) { el.innerHTML = '<p class="empty">Your EGO model will be built here as you talk to your avatar.<br><br>Every conversation teaches it who you are.</p>'; return; }
   let html = '';
   if (persona) html += `<div class="persona-box">${persona}</div>`;
-  const bCount = (ego?.beliefs || []).length;
-  const vCount = (ego?.values || []).length;
-  const rCount = Object.keys(ego?.relationships || {}).length;
-  const pCount = (ego?.reasoning_patterns || []).length;
-  html += `<div class="stat-row">
-    <div class="stat-chip"><div class="n">${bCount}</div><div class="l">Beliefs</div></div>
-    <div class="stat-chip"><div class="n">${vCount}</div><div class="l">Values</div></div>
-    <div class="stat-chip"><div class="n">${rCount}</div><div class="l">Relations</div></div>
-    <div class="stat-chip"><div class="n">${pCount}</div><div class="l">Patterns</div></div>
-  </div>`;
-  if (ego?.beliefs?.length)
-    html += `<div class="ego-section"><h4>Core Beliefs</h4><ul>${ego.beliefs.slice(0,8).map(b=>`<li>${b}</li>`).join('')}</ul></div>`;
-  if (ego?.values?.length)
-    html += `<div class="ego-section"><h4>Values</h4><ul>${ego.values.slice(0,6).map(v=>`<li>${v}</li>`).join('')}</ul></div>`;
-  if (ego?.reasoning_patterns?.length)
-    html += `<div class="ego-section"><h4>How They Think</h4><ul>${ego.reasoning_patterns.slice(0,5).map(p=>`<li>${p}</li>`).join('')}</ul></div>`;
-  if (ego?.relationships && Object.keys(ego.relationships).length)
-    html += `<div class="ego-section"><h4>Relationships</h4>${Object.entries(ego.relationships).slice(0,8).map(([p,d])=>`<div class="ego-rel"><strong>${p}:</strong> ${d}</div>`).join('')}</div>`;
-  if (ego?.contradictions?.length)
-    html += `<div class="ego-section"><h4>Growth & Contradictions</h4><ul>${ego.contradictions.slice(0,4).map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
+  const bCount=(ego?.beliefs||[]).length, vCount=(ego?.values||[]).length;
+  const rCount=Object.keys(ego?.relationships||{}).length, pCount=(ego?.reasoning_patterns||[]).length;
+  html += `<div class="stat-row"><div class="stat-chip"><div class="n">${bCount}</div><div class="l">Beliefs</div></div><div class="stat-chip"><div class="n">${vCount}</div><div class="l">Values</div></div><div class="stat-chip"><div class="n">${rCount}</div><div class="l">Relations</div></div><div class="stat-chip"><div class="n">${pCount}</div><div class="l">Patterns</div></div></div>`;
+  if (ego?.beliefs?.length) html += `<div class="ego-section"><h4>Core Beliefs</h4><ul>${ego.beliefs.slice(0,8).map(b=>`<li>${b}</li>`).join('')}</ul></div>`;
+  if (ego?.values?.length) html += `<div class="ego-section"><h4>Values</h4><ul>${ego.values.slice(0,6).map(v=>`<li>${v}</li>`).join('')}</ul></div>`;
+  if (ego?.reasoning_patterns?.length) html += `<div class="ego-section"><h4>How They Think</h4><ul>${ego.reasoning_patterns.slice(0,5).map(p=>`<li>${p}</li>`).join('')}</ul></div>`;
+  if (ego?.relationships&&Object.keys(ego.relationships).length) html += `<div class="ego-section"><h4>Relationships</h4>${Object.entries(ego.relationships).slice(0,8).map(([p,d])=>`<div class="ego-rel"><strong>${p}:</strong> ${d}</div>`).join('')}</div>`;
+  if (ego?.contradictions?.length) html += `<div class="ego-section"><h4>Growth & Contradictions</h4><ul>${ego.contradictions.slice(0,4).map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
   el.innerHTML = html;
 }
 
@@ -374,46 +194,24 @@ async function loadSessions() {
   const el = document.getElementById('tab-sessions');
   if (!sessions.length) { el.innerHTML = '<p class="empty">No sessions yet.</p>'; return; }
   el.innerHTML = sessions.map(s =>
-    `<div class="sitem">
-       <div>
-         <div class="stype">${s.session_type === 'customer_training' ? '🎓 Training' : '💬 User chat'}</div>
-         <div class="sdate">${s.started_at ? s.started_at.slice(0,16) : ''}</div>
-       </div>
-       <div class="scount">${s.message_count} msgs</div>
-     </div>`
+    `<div class="sitem"><div><div class="stype">${s.session_type==='customer_training'?'🎓 Training':'💬 User chat'}</div><div class="sdate">${s.started_at?s.started_at.slice(0,16):''}</div></div><div class="scount">${s.message_count} msgs</div></div>`
   ).join('');
 }
 
-async function delChunk(id, btn) {
-  await fetch(`/customer/knowledge/${id}`, {method: 'DELETE'});
-  btn.closest('.chunk').remove();
-}
+window.delChunk = async function(id, btn) { await fetch(`/customer/knowledge/${id}`,{method:'DELETE'}); btn.closest('.chunk').remove(); }
 
-function switchTab(name, el) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+window.switchTab = function(name, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'ego') loadEgo();
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name==='ego') loadEgo();
 }
 
-function setStatus(text, color) {
-  document.getElementById('sText').textContent = text;
-  document.getElementById('sDot').style.background = color;
-}
+function setStatus(text, color) { document.getElementById('sText').textContent=text; document.getElementById('sDot').style.background=color; }
+function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3500); }
 
-function setTranscript(text) {
-  document.getElementById('transcript').textContent = text;
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3500);
-}
-
-setInterval(() => { if (sessionId) loadKnowledge(); }, 30000);
+setInterval(()=>{ if(sessionId) loadKnowledge(); }, 30000);
 init();
 </script>
 </body>
