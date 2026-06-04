@@ -110,84 +110,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 </div>
 
 <script>
-let camStream=null, userId=null, sessionId=null, customerId=null, livekitRoom=null;
-
-async function connectLiveKit(url, token) {
-  if(livekitRoom) { try { await livekitRoom.disconnect(); } catch(e) {} livekitRoom=null; }
-  const { Room, RoomEvent, Track } = window.LivekitClient;
-  const c = document.getElementById('avatarContainer');
-  if(c) c.innerHTML = '';
-  livekitRoom = new Room({
-    adaptiveStream: true,
-    dynacast: true,
-    videoCaptureDefaults: { resolution: { width: 1280, height: 720 } }
-  });
-  // Subscribe to all tracks from remote participants
-  function attachVideoTrack(track) {
-    if(track.kind !== Track.Kind.Video) return;
-    const el = track.attach();
-    el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-    const container = document.getElementById('avatarContainer') || document.getElementById('vpanel');
-    if(container) { container.innerHTML=''; container.appendChild(el); }
-    document.getElementById('lmsg').style.display='none';
-  }
-
-  livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-    participant.trackPublications.forEach((pub) => {
-      if(pub.track) attachVideoTrack(pub.track);
-      else pub.setSubscribed(true);
-    });
-  });
-  livekitRoom.on(RoomEvent.TrackPublished, (pub, participant) => {
-    pub.setSubscribed(true);
-  });
-  livekitRoom.on(RoomEvent.TrackSubscribed, (track) => {
-    if(track.kind === Track.Kind.Video) {
-      const el = track.attach();
-      el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-      const c = document.getElementById('avatarContainer');
-      c.innerHTML = '';
-      c.appendChild(el);
-      document.getElementById('lmsg').style.display='none';
-      document.getElementById('avatarIframe').style.display='block';
-      setStatus('Connected','#4ade80');
-    }
-  });
-  livekitRoom.on(RoomEvent.Disconnected, () => setStatus('Disconnected','#333'));
-  await livekitRoom.connect(url, token);
-
-  // Handle tracks already in room at connect time
-  livekitRoom.remoteParticipants.forEach((participant) => {
-    participant.trackPublications.forEach((pub) => {
-      if(pub.isSubscribed && pub.track) {
-        attachVideoTrack(pub.track);
-      } else {
-        pub.setSubscribed(true);
-      }
-    });
-  });
-
-  // Poll for avatar track — ElevenLabs connector may publish after connect
-  let attempts = 0;
-  const poll = setInterval(() => {
-    attempts++;
-    let found = false;
-    livekitRoom.remoteParticipants.forEach((participant) => {
-      participant.trackPublications.forEach((pub) => {
-        if(pub.kind === 'video') {
-          found = true;
-          if(pub.isSubscribed && pub.track) {
-            attachVideoTrack(pub.track);
-            clearInterval(poll);
-          } else {
-            pub.setSubscribed(true);
-          }
-        }
-      });
-    });
-    if(attempts > 30) clearInterval(poll);
-  }, 1000);
-}
+let camStream=null, userId=null, sessionId=null, customerId=null;
 
 async function initTalk() {
   document.getElementById('cam-prompt').style.display='flex';
@@ -228,7 +151,6 @@ async function launchSession() {
   try { const s=await navigator.mediaDevices.getUserMedia({video:true}); document.getElementById('userCam').srcObject=s; } catch(e){}
 
   setStatus('Connecting...','#f59e0b');
-
   const r=await fetch('/u/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId})});
   const d=await r.json();
   if(d.error){document.getElementById('lmsg').textContent='Error: '+d.error;setStatus('Error','#ef4444');return;}
@@ -236,45 +158,19 @@ async function launchSession() {
   sessionId=d.session_id;
   customerId=d.customer_id;
 
-  if(!d.livekit_url || !d.livekit_client_token){
-    document.getElementById('lmsg').textContent='Not configured — check admin panel';
-    setStatus('Error','#ef4444');
-    return;
-  }
-
-  await connectLiveKit(d.livekit_url, d.livekit_client_token);
+  // Show iframe — ElevenLabs agent connector handles voice + video
+  document.getElementById('lmsg').style.display='none';
+  document.getElementById('avatarIframe').style.display='block';
+  setStatus('Connected','#4ade80');
 }
 
-function setStatus(text, color) {
-  document.getElementById('sText').textContent=text;
-  document.getElementById('sDot').style.background=color;
-}
+function setStatus(text,color){document.getElementById('sText').textContent=text;document.getElementById('sDot').style.background=color;}
 
-function addMsg(cls, who, text) {
-  if(!text) return;
-  const log=document.getElementById('chatLog');
-  log.innerHTML+=`<div class="msg ${cls}"><div class="who">${who}</div><div class="text">${text}</div></div>`;
-  log.scrollTop=log.scrollHeight;
-}
-
-function renderHistory(history) {
-  const log=document.getElementById('chatLog'); log.innerHTML='';
-  history.forEach(m=>addMsg(m.speaker==='user'?'user':'avatar',m.speaker==='user'?'You':'Petar',m.text));
-}
-
-async function saveMsg(speaker, text) {
-  if(!text) return;
-  await fetch('/u/message',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({session_id:sessionId,customer_id:customerId,user_id:userId,speaker,text})});
-}
+function addMsg(cls,who,text){if(!text)return;const log=document.getElementById('chatLog');log.innerHTML+=`<div class="msg ${cls}"><div class="who">${who}</div><div class="text">${text}</div></div>`;log.scrollTop=log.scrollHeight;}
+function renderHistory(history){const log=document.getElementById('chatLog');log.innerHTML='';history.forEach(m=>addMsg(m.speaker==='user'?'user':'avatar',m.speaker==='user'?'You':'Petar',m.text));}
 
 async function goBack() {
-  if(livekitRoom) {
-    try { await livekitRoom.disconnect(); } catch(e) {}
-    livekitRoom = null;
-  }
-  const c = document.getElementById('avatarContainer');
-  if(c) { c.innerHTML=''; }
+  document.getElementById('avatarIframe').style.display='none';
   document.getElementById('lmsg').style.display='block';
   document.getElementById('lmsg').textContent='Connecting...';
   document.getElementById('talk-page').style.display='none';
