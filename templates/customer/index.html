@@ -111,7 +111,7 @@ async function init() {
     const la = d.la_session;
     document.getElementById('lmsg').style.display = 'none';
 
-    const token = la.token || la.access_token || la.livekit_token || la.session_token;
+    const token = la.livekit_client_token || la.token || la.session_token;
     liveSession = new LiveAvatarSession(token, { voiceChat: true });
 
     liveSession.on('connected', () => setStatus('Live', '#4ade80'));
