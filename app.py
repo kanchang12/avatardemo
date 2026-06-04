@@ -39,7 +39,7 @@ def init_db():
     with psycopg2.connect(DATABASE_URL) as db:
         with db.cursor() as cur:
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS customers (
+                CREATE TABLE IF NOT EXISTS ava_customers (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
                     email TEXT UNIQUE NOT NULL,
@@ -52,7 +52,7 @@ def init_db():
                     created_at TEXT,
                     active INTEGER DEFAULT 1
                 );
-                CREATE TABLE IF NOT EXISTS users (
+                CREATE TABLE IF NOT EXISTS ava_users (
                     id TEXT PRIMARY KEY,
                     face_encoding TEXT,
                     name TEXT DEFAULT 'Guest',
@@ -60,7 +60,7 @@ def init_db():
                     last_seen TEXT,
                     visit_count INTEGER DEFAULT 1
                 );
-                CREATE TABLE IF NOT EXISTS sessions (
+                CREATE TABLE IF NOT EXISTS ava_sessions (
                     id TEXT PRIMARY KEY,
                     customer_id TEXT NOT NULL,
                     user_id TEXT,
@@ -68,7 +68,7 @@ def init_db():
                     started_at TEXT,
                     ended_at TEXT
                 );
-                CREATE TABLE IF NOT EXISTS messages (
+                CREATE TABLE IF NOT EXISTS ava_messages (
                     id SERIAL PRIMARY KEY,
                     session_id TEXT NOT NULL,
                     customer_id TEXT NOT NULL,
@@ -77,7 +77,7 @@ def init_db():
                     text TEXT NOT NULL,
                     timestamp TEXT NOT NULL
                 );
-                CREATE TABLE IF NOT EXISTS knowledge_base (
+                CREATE TABLE IF NOT EXISTS ava_knowledge_base (
                     id SERIAL PRIMARY KEY,
                     customer_id TEXT NOT NULL,
                     chunk TEXT NOT NULL,
@@ -86,14 +86,14 @@ def init_db():
                     ego_layer TEXT,
                     created_at TEXT
                 );
-                CREATE TABLE IF NOT EXISTS ego_revisions (
+                CREATE TABLE IF NOT EXISTS ava_ego_revisions (
                     id SERIAL PRIMARY KEY,
                     customer_id TEXT NOT NULL,
                     revision TEXT NOT NULL,
                     trigger_text TEXT,
                     created_at TEXT
                 );
-                CREATE TABLE IF NOT EXISTS admins (
+                CREATE TABLE IF NOT EXISTS ava_admins (
                     id TEXT PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
                     password_hash TEXT NOT NULL,
@@ -109,10 +109,10 @@ init_db()
 def seed_admin():
     with psycopg2.connect(DATABASE_URL) as db:
         with db.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM admins")
+            cur.execute("SELECT COUNT(*) FROM ava_admins")
             if cur.fetchone()[0] == 0:
                 cur.execute(
-                    "INSERT INTO admins (id,email,password_hash,created_at) VALUES (%s,%s,%s,%s)",
+                    "INSERT INTO ava_admins (id,email,password_hash,created_at) VALUES (%s,%s,%s,%s)",
                     (str(uuid.uuid4()), "admin@example.com",
                      hashlib.sha256("password".encode()).hexdigest(),
                      datetime.utcnow().isoformat())
@@ -131,7 +131,7 @@ def seed_customer():
         return
     with psycopg2.connect(DATABASE_URL) as db:
         with db.cursor() as cur:
-            cur.execute("UPDATE customers SET avatar_id=%s, elevenlabs_agent_id=%s WHERE avatar_id IS NULL OR avatar_id=''",
+            cur.execute("UPDATE ava_customers SET avatar_id=%s, elevenlabs_agent_id=%s WHERE avatar_id IS NULL OR avatar_id=''",
                         (avatar_id, agent_id))
         db.commit()
 
@@ -143,17 +143,17 @@ def hash_pw(pw): return hashlib.sha256(pw.encode()).hexdigest()
 
 def get_customer(db, cid):
     with db.cursor() as cur:
-        cur.execute("SELECT * FROM customers WHERE id=%s", (cid,))
+        cur.execute("SELECT * FROM ava_customers WHERE id=%s", (cid,))
         return cur.fetchone()
 
 def get_first_customer(db):
     with db.cursor() as cur:
-        cur.execute("SELECT * FROM customers WHERE active=1 LIMIT 1")
+        cur.execute("SELECT * FROM ava_customers WHERE active=1 LIMIT 1")
         return cur.fetchone()
 
 def liveavatar_session_token(avatar_id, elevenlabs_secret_id, elevenlabs_agent_id):
     r = requests.post(
-        "https://api.liveavatar.com/v1/sessions/token",
+        "https://api.liveavatar.com/v1/ava_sessions/token",
         headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
         json={
             "avatar_id": avatar_id,
@@ -218,7 +218,7 @@ Extract and return ONLY valid JSON, no markdown:
 def update_ego_model(customer_id, new_ego_data, trigger_text):
     with psycopg2.connect(DATABASE_URL) as db:
         with db.cursor() as cur:
-            cur.execute("SELECT ego_model, persona_summary FROM customers WHERE id=%s", (customer_id,))
+            cur.execute("SELECT ego_model, persona_summary FROM ava_customers WHERE id=%s", (customer_id,))
             row = cur.fetchone()
             existing = {}
             if row and row["ego_model"]:
@@ -242,17 +242,17 @@ def update_ego_model(customer_id, new_ego_data, trigger_text):
             existing["last_updated"] = datetime.utcnow().isoformat()
 
             ego_json = json.dumps(existing)
-            cur.execute("UPDATE customers SET ego_model=%s, persona_summary=%s WHERE id=%s",
+            cur.execute("UPDATE ava_customers SET ego_model=%s, persona_summary=%s WHERE id=%s",
                         (ego_json, summary, customer_id))
-            cur.execute("INSERT INTO ego_revisions (customer_id, revision, trigger_text, created_at) VALUES (%s,%s,%s,%s)",
+            cur.execute("INSERT INTO ava_ego_revisions (customer_id, revision, trigger_text, created_at) VALUES (%s,%s,%s,%s)",
                         (customer_id, ego_json, trigger_text[:500], datetime.utcnow().isoformat()))
         db.commit()
 
 def get_ego_context(db, customer_id):
     with db.cursor() as cur:
-        cur.execute("SELECT ego_model, persona_summary FROM customers WHERE id=%s", (customer_id,))
+        cur.execute("SELECT ego_model, persona_summary FROM ava_customers WHERE id=%s", (customer_id,))
         c = cur.fetchone()
-        cur.execute("SELECT chunk, category FROM knowledge_base WHERE customer_id=%s ORDER BY created_at DESC LIMIT 40", (customer_id,))
+        cur.execute("SELECT chunk, category FROM ava_knowledge_base WHERE customer_id=%s ORDER BY created_at DESC LIMIT 40", (customer_id,))
         chunks = cur.fetchall()
 
     ego = None
@@ -288,7 +288,7 @@ def find_face(db, enc, tolerance=0.5):
     try:
         import face_recognition
         with db.cursor() as cur:
-            cur.execute("SELECT * FROM users WHERE face_encoding IS NOT NULL")
+            cur.execute("SELECT * FROM ava_users WHERE face_encoding IS NOT NULL")
             for u in cur.fetchall():
                 stored = np.array(json.loads(u["face_encoding"]))
                 if face_recognition.face_distance([stored], enc)[0] < tolerance:
@@ -320,17 +320,17 @@ def user_identify():
             if match:
                 user_id = match["id"]; name = match["name"]; returning = True
                 with db.cursor() as cur:
-                    cur.execute("UPDATE users SET last_seen=%s, visit_count=visit_count+1 WHERE id=%s",
+                    cur.execute("UPDATE ava_users SET last_seen=%s, visit_count=visit_count+1 WHERE id=%s",
                                (datetime.utcnow().isoformat(), user_id))
             else:
                 with db.cursor() as cur:
-                    cur.execute("INSERT INTO users (id, face_encoding, name, first_seen, last_seen) VALUES (%s,%s,%s,%s,%s)",
+                    cur.execute("INSERT INTO ava_users (id, face_encoding, name, first_seen, last_seen) VALUES (%s,%s,%s,%s,%s)",
                                (user_id, json.dumps(enc.tolist()), "Guest",
                                 datetime.utcnow().isoformat(), datetime.utcnow().isoformat()))
             db.commit()
 
     with db.cursor() as cur:
-        cur.execute("SELECT speaker, text FROM messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 20", (user_id,))
+        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 20", (user_id,))
         history = cur.fetchall()
 
     return jsonify({
@@ -351,7 +351,7 @@ def user_session():
     rag_context = get_ego_context(db, customer["id"])
     session_id = str(uuid.uuid4())
     with db.cursor() as cur:
-        cur.execute("INSERT INTO sessions (id, customer_id, user_id, session_type, started_at) VALUES (%s,%s,%s,%s,%s)",
+        cur.execute("INSERT INTO ava_sessions (id, customer_id, user_id, session_type, started_at) VALUES (%s,%s,%s,%s,%s)",
                    (session_id, customer["id"], user_id, "user_chat", datetime.utcnow().isoformat()))
     db.commit()
 
@@ -380,7 +380,7 @@ def user_message():
     data = request.get_json(silent=True) or {}
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("INSERT INTO messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s,%s)",
+        cur.execute("INSERT INTO ava_messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s,%s)",
                    (data.get("session_id"), data.get("customer_id"), data.get("user_id"),
                     data.get("speaker"), data.get("text"), datetime.utcnow().isoformat()))
     db.commit()
@@ -396,7 +396,7 @@ def customer_login():
         data = request.get_json(silent=True) or {}
         db = get_db()
         with db.cursor() as cur:
-            cur.execute("SELECT * FROM customers WHERE email=%s AND password_hash=%s",
+            cur.execute("SELECT * FROM ava_customers WHERE email=%s AND password_hash=%s",
                        (data.get("email"), hash_pw(data.get("password", ""))))
             c = cur.fetchone()
         if c:
@@ -426,7 +426,7 @@ def customer_session():
 
     session_id = str(uuid.uuid4())
     with db.cursor() as cur:
-        cur.execute("INSERT INTO sessions (id, customer_id, session_type, started_at) VALUES (%s,%s,%s,%s)",
+        cur.execute("INSERT INTO ava_sessions (id, customer_id, session_type, started_at) VALUES (%s,%s,%s,%s)",
                    (session_id, customer["id"], "customer_training", datetime.utcnow().isoformat()))
     db.commit()
 
@@ -441,7 +441,7 @@ def customer_session():
             return jsonify({"error": err}), 500
 
     with db.cursor() as cur:
-        cur.execute("SELECT COUNT(*) as cnt FROM knowledge_base WHERE customer_id=%s", (customer["id"],))
+        cur.execute("SELECT COUNT(*) as cnt FROM ava_knowledge_base WHERE customer_id=%s", (customer["id"],))
         knowledge_count = cur.fetchone()["cnt"]
 
     ego = None
@@ -472,7 +472,7 @@ def customer_train():
     customer_id = session["customer_id"]
 
     with db.cursor() as cur:
-        cur.execute("INSERT INTO messages (session_id, customer_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s)",
+        cur.execute("INSERT INTO ava_messages (session_id, customer_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s)",
                    (session_id, customer_id, "customer", text, datetime.utcnow().isoformat()))
     db.commit()
 
@@ -483,14 +483,14 @@ def customer_train():
     with db.cursor() as cur:
         for chunk in ego_data.get("raw_chunks", []):
             if chunk.get("chunk"):
-                cur.execute("INSERT INTO knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+                cur.execute("INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
                            (customer_id, chunk["chunk"], session_id, chunk.get("category", "fact"), "raw", datetime.utcnow().isoformat()))
                 chunks_added += 1
         for belief in ego_data.get("beliefs", []):
-            cur.execute("INSERT INTO knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+            cur.execute("INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
                        (customer_id, belief, session_id, "belief", "ego", datetime.utcnow().isoformat()))
         for value in ego_data.get("values", []):
-            cur.execute("INSERT INTO knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+            cur.execute("INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
                        (customer_id, value, session_id, "value", "ego", datetime.utcnow().isoformat()))
     db.commit()
 
@@ -516,7 +516,7 @@ def customer_knowledge():
     if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("SELECT id, chunk, category, ego_layer, created_at FROM knowledge_base WHERE customer_id=%s ORDER BY created_at DESC",
+        cur.execute("SELECT id, chunk, category, ego_layer, created_at FROM ava_knowledge_base WHERE customer_id=%s ORDER BY created_at DESC",
                    (session["customer_id"],))
         chunks = cur.fetchall()
     return jsonify([dict(c) for c in chunks])
@@ -526,17 +526,17 @@ def delete_knowledge(kid):
     if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("DELETE FROM knowledge_base WHERE id=%s AND customer_id=%s", (kid, session["customer_id"]))
+        cur.execute("DELETE FROM ava_knowledge_base WHERE id=%s AND customer_id=%s", (kid, session["customer_id"]))
     db.commit()
     return jsonify({"ok": True})
 
-@app.route("/customer/sessions", methods=["GET", "POST"])
+@app.route("/customer/ava_sessions", methods=["GET", "POST"])
 def customer_sessions():
     if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
         cur.execute("""SELECT s.id, s.session_type, s.started_at, COUNT(m.id) as message_count
-                       FROM sessions s LEFT JOIN messages m ON s.id=m.session_id
+                       FROM ava_sessions s LEFT JOIN ava_messages m ON s.id=m.session_id
                        WHERE s.customer_id=%s GROUP BY s.id, s.session_type, s.started_at
                        ORDER BY s.started_at DESC LIMIT 50""", (session["customer_id"],))
         rows = cur.fetchall()
@@ -563,7 +563,7 @@ def admin_login():
         data = request.get_json(silent=True) or {}
         db = get_db()
         with db.cursor() as cur:
-            cur.execute("SELECT * FROM admins WHERE email=%s AND password_hash=%s",
+            cur.execute("SELECT * FROM ava_admins WHERE email=%s AND password_hash=%s",
                        (data.get("email"), hash_pw(data.get("password", ""))))
             a = cur.fetchone()
         if a:
@@ -582,7 +582,7 @@ def admin_home():
     if "admin_id" not in session: return redirect(url_for("admin_login"))
     return render_template("admin/index.html")
 
-@app.route("/admin/customers", methods=["GET", "POST"])
+@app.route("/admin/ava_customers", methods=["GET", "POST"])
 def admin_customers():
     if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
     if request.method == "POST":
@@ -591,7 +591,7 @@ def admin_customers():
         cid = str(uuid.uuid4())
         with db.cursor() as cur:
             cur.execute(
-                "INSERT INTO customers (id, name, email, password_hash, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO ava_customers (id, name, email, password_hash, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                 (cid, data["name"], data["email"], hash_pw(data["password"]),
                  (data.get("avatar_id") or LIVEAVATAR_AVATAR_ID or "").strip(),
                  (data.get("elevenlabs_agent_id") or ELEVENLABS_AGENT_ID or "").strip(),
@@ -602,9 +602,9 @@ def admin_customers():
         return jsonify({"ok": True, "id": cid})
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("SELECT id, name, email, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, active, created_at FROM customers ORDER BY created_at DESC")
-        customers = cur.fetchall()
-    return jsonify([dict(c) for c in customers])
+        cur.execute("SELECT id, name, email, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, active, created_at FROM ava_customers ORDER BY created_at DESC")
+        ava_customers = cur.fetchall()
+    return jsonify([dict(c) for c in ava_customers])
 
 @app.route("/admin/customer/<cid>/update", methods=["GET", "POST"])
 def admin_update_customer(cid):
@@ -614,7 +614,7 @@ def admin_update_customer(cid):
     with db.cursor() as cur:
         for field in ["elevenlabs_secret_id", "elevenlabs_agent_id", "avatar_id"]:
             if field in data and data[field]:
-                cur.execute(f"UPDATE customers SET {field}=%s WHERE id=%s", (data[field].strip(), cid))
+                cur.execute(f"UPDATE ava_customers SET {field}=%s WHERE id=%s", (data[field].strip(), cid))
     db.commit()
     return jsonify({"ok": True})
 
@@ -623,7 +623,7 @@ def admin_toggle_customer(cid):
     if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("UPDATE customers SET active=1-active WHERE id=%s", (cid,))
+        cur.execute("UPDATE ava_customers SET active=1-active WHERE id=%s", (cid,))
     db.commit()
     return jsonify({"ok": True})
 
@@ -633,9 +633,9 @@ def admin_stats():
     db = get_db()
     with db.cursor() as cur:
         stats = {}
-        for table, key in [("customers","total_customers"),("users","total_users"),
-                           ("sessions","total_sessions"),("messages","total_messages"),
-                           ("knowledge_base","total_knowledge_chunks"),("ego_revisions","total_ego_revisions")]:
+        for table, key in [("ava_customers","total_customers"),("ava_users","total_users"),
+                           ("ava_sessions","total_sessions"),("ava_messages","total_messages"),
+                           ("ava_knowledge_base","total_knowledge_chunks"),("ava_ego_revisions","total_ego_revisions")]:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
             stats[key] = cur.fetchone()["count"]
     return jsonify(stats)
