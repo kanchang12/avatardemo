@@ -14,12 +14,13 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "trione-secret-change-in-prod")
 CORS(app)
 
-DATABASE_URL    = os.getenv("DATABASE_URL")
-GEMINI_API_KEY  = os.getenv("GEMINI_API_KEY")
+DATABASE_URL        = os.getenv("DATABASE_URL")
+GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY")
 ELEVENLABS_API_KEY  = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
-DID_API_KEY = os.getenv("DID_API_KEY")
-DID_AGENT_ID = os.getenv("DID_AGENT_ID")
+DID_API_KEY         = os.getenv("DID_API_KEY")
+DID_AGENT_ID        = os.getenv("DID_AGENT_ID")
+LIVEAVATAR_AVATAR_ID = os.getenv("LIVEAVATAR_AVATAR_ID", "")
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -98,8 +99,10 @@ def seed_customer():
         return
     with psycopg2.connect(DATABASE_URL) as db:
         with db.cursor() as cur:
-            cur.execute("UPDATE ava_customers SET elevenlabs_agent_id=%s WHERE elevenlabs_agent_id IS NULL OR elevenlabs_agent_id=''",
-                        (agent_id,))
+            cur.execute(
+                "UPDATE ava_customers SET elevenlabs_agent_id=%s WHERE elevenlabs_agent_id IS NULL OR elevenlabs_agent_id=''",
+                (agent_id,)
+            )
         db.commit()
 
 seed_customer()
@@ -122,24 +125,21 @@ def did_create_session(agent_id=None):
     aid = agent_id or DID_AGENT_ID
     if not aid:
         return None, "Missing DID_AGENT_ID"
-    
-    # Using Bearer token as required by D-ID V2
+
     headers = {
         "Authorization": f"Bearer {DID_API_KEY.strip()}",
         "Content-Type": "application/json",
         "accept": "application/json"
     }
-    
+
     try:
         r = requests.post(
             f"https://api.d-id.com/agents/{aid}/sessions",
             headers=headers,
             json={}
         )
-        
         if r.status_code != 200:
             return None, f"D-ID returned {r.status_code}: {r.text}"
-            
         data = r.json()
         return {
             "session_id": data.get("id"),
@@ -224,15 +224,20 @@ def update_ego_model(customer_id, new_ego_data, trigger_text):
             ego_json = json.dumps(existing)
             cur.execute("UPDATE ava_customers SET ego_model=%s, persona_summary=%s WHERE id=%s",
                         (ego_json, summary, customer_id))
-            cur.execute("INSERT INTO ava_ego_revisions (customer_id, revision, trigger_text, created_at) VALUES (%s,%s,%s,%s)",
-                        (customer_id, ego_json, trigger_text[:500], datetime.utcnow().isoformat()))
+            cur.execute(
+                "INSERT INTO ava_ego_revisions (customer_id, revision, trigger_text, created_at) VALUES (%s,%s,%s,%s)",
+                (customer_id, ego_json, trigger_text[:500], datetime.utcnow().isoformat())
+            )
         db.commit()
 
 def get_ego_context(db, customer_id):
     with db.cursor() as cur:
         cur.execute("SELECT ego_model, persona_summary FROM ava_customers WHERE id=%s", (customer_id,))
         c = cur.fetchone()
-        cur.execute("SELECT chunk, category FROM ava_knowledge_base WHERE customer_id=%s ORDER BY created_at DESC LIMIT 40", (customer_id,))
+        cur.execute(
+            "SELECT chunk, category FROM ava_knowledge_base WHERE customer_id=%s ORDER BY created_at DESC LIMIT 40",
+            (customer_id,)
+        )
         chunks = cur.fetchall()
 
     ego = None
@@ -242,12 +247,12 @@ def get_ego_context(db, customer_id):
 
     parts = []
     if ego:
-        if ego.get("summary"): parts.append(f"=== PERSONA ===\n{ego['summary']}")
-        if ego.get("beliefs"): parts.append("=== BELIEFS ===\n" + "\n".join(f"• {b}" for b in ego["beliefs"][:10]))
-        if ego.get("values"): parts.append("=== VALUES ===\n" + "\n".join(f"• {v}" for v in ego["values"][:8]))
+        if ego.get("summary"):            parts.append(f"=== PERSONA ===\n{ego['summary']}")
+        if ego.get("beliefs"):            parts.append("=== BELIEFS ===\n" + "\n".join(f"• {b}" for b in ego["beliefs"][:10]))
+        if ego.get("values"):             parts.append("=== VALUES ===\n" + "\n".join(f"• {v}" for v in ego["values"][:8]))
         if ego.get("reasoning_patterns"): parts.append("=== HOW THEY THINK ===\n" + "\n".join(f"• {r}" for r in ego["reasoning_patterns"][:6]))
         if ego.get("relationships"):
-            parts.append("=== RELATIONSHIPS ===\n" + "\n".join(f"• {p}: {d}" for p,d in list(ego["relationships"].items())[:10]))
+            parts.append("=== RELATIONSHIPS ===\n" + "\n".join(f"• {p}: {d}" for p, d in list(ego["relationships"].items())[:10]))
     if chunks:
         parts.append("=== KNOWLEDGE ===\n" + "\n".join(f"[{c['category']}] {c['chunk']}" for c in chunks))
     return "\n\n".join(parts)
@@ -262,7 +267,8 @@ def encode_face(b64):
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         encs = face_recognition.face_encodings(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         return encs[0] if encs else None
-    except Exception as e: print(f"Face encode error: {e}"); return None
+    except Exception as e:
+        print(f"Face encode error: {e}"); return None
 
 def find_face(db, enc, tolerance=0.5):
     try:
@@ -273,7 +279,8 @@ def find_face(db, enc, tolerance=0.5):
                 stored = np.array(json.loads(u["face_encoding"]))
                 if face_recognition.face_distance([stored], enc)[0] < tolerance:
                     return dict(u)
-    except Exception as e: print(f"Face match error: {e}")
+    except Exception as e:
+        print(f"Face match error: {e}")
     return None
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -300,17 +307,24 @@ def user_identify():
             if match:
                 user_id = match["id"]; name = match["name"]; returning = True
                 with db.cursor() as cur:
-                    cur.execute("UPDATE ava_users SET last_seen=%s, visit_count=visit_count+1 WHERE id=%s",
-                               (datetime.utcnow().isoformat(), user_id))
+                    cur.execute(
+                        "UPDATE ava_users SET last_seen=%s, visit_count=visit_count+1 WHERE id=%s",
+                        (datetime.utcnow().isoformat(), user_id)
+                    )
             else:
                 with db.cursor() as cur:
-                    cur.execute("INSERT INTO ava_users (id, face_encoding, name, first_seen, last_seen) VALUES (%s,%s,%s,%s,%s)",
-                               (user_id, json.dumps(enc.tolist()), "Guest",
-                                datetime.utcnow().isoformat(), datetime.utcnow().isoformat()))
+                    cur.execute(
+                        "INSERT INTO ava_users (id, face_encoding, name, first_seen, last_seen) VALUES (%s,%s,%s,%s,%s)",
+                        (user_id, json.dumps(enc.tolist()), "Guest",
+                         datetime.utcnow().isoformat(), datetime.utcnow().isoformat())
+                    )
             db.commit()
 
     with db.cursor() as cur:
-        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 20", (user_id,))
+        cur.execute(
+            "SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 20",
+            (user_id,)
+        )
         history = cur.fetchall()
 
     return jsonify({
@@ -331,12 +345,13 @@ def user_session():
     rag_context = get_ego_context(db, customer["id"])
     session_id = str(uuid.uuid4())
     with db.cursor() as cur:
-        cur.execute("INSERT INTO ava_sessions (id, customer_id, user_id, session_type, started_at) VALUES (%s,%s,%s,%s,%s)",
-                   (session_id, customer["id"], user_id, "user_chat", datetime.utcnow().isoformat()))
+        cur.execute(
+            "INSERT INTO ava_sessions (id, customer_id, user_id, session_type, started_at) VALUES (%s,%s,%s,%s,%s)",
+            (session_id, customer["id"], user_id, "user_chat", datetime.utcnow().isoformat())
+        )
     db.commit()
 
     did_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or DID_AGENT_ID
-
     did, err = did_create_session(did_agent_id)
     if err:
         return jsonify({"error": err}), 500
@@ -357,9 +372,11 @@ def user_message():
     data = request.get_json(silent=True) or {}
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("INSERT INTO ava_messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s,%s)",
-                   (data.get("session_id"), data.get("customer_id"), data.get("user_id"),
-                    data.get("speaker"), data.get("text"), datetime.utcnow().isoformat()))
+        cur.execute(
+            "INSERT INTO ava_messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s,%s)",
+            (data.get("session_id"), data.get("customer_id"), data.get("user_id"),
+             data.get("speaker"), data.get("text"), datetime.utcnow().isoformat())
+        )
     db.commit()
     return jsonify({"ok": True})
 
@@ -373,8 +390,10 @@ def customer_login():
         data = request.get_json(silent=True) or {}
         db = get_db()
         with db.cursor() as cur:
-            cur.execute("SELECT * FROM ava_customers WHERE email=%s AND password_hash=%s",
-                       (data.get("email"), hash_pw(data.get("password", ""))))
+            cur.execute(
+                "SELECT * FROM ava_customers WHERE email=%s AND password_hash=%s",
+                (data.get("email"), hash_pw(data.get("password", "")))
+            )
             c = cur.fetchone()
         if c:
             session["customer_id"] = c["id"]
@@ -399,17 +418,16 @@ def customer_session():
         return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     customer = get_customer(db, session["customer_id"])
-    if not customer: return jsonify({"error": "Not found"}), 404
+    if not customer:
+        return jsonify({"error": "Not found"}), 404
 
     session_id = str(uuid.uuid4())
     with db.cursor() as cur:
-        cur.execute("INSERT INTO ava_sessions (id, customer_id, session_type, started_at) VALUES (%s,%s,%s,%s)",
-                   (session_id, customer["id"], "customer_training", datetime.utcnow().isoformat()))
+        cur.execute(
+            "INSERT INTO ava_sessions (id, customer_id, session_type, started_at) VALUES (%s,%s,%s,%s)",
+            (session_id, customer["id"], "customer_training", datetime.utcnow().isoformat())
+        )
     db.commit()
-
-    avatar_id = (customer["avatar_id"] or "").strip() or LIVEAVATAR_AVATAR_ID
-    secret_id = (customer["elevenlabs_secret_id"] or "").strip()
-    agent_id  = (customer["elevenlabs_agent_id"] or "").strip() or ELEVENLABS_AGENT_ID
 
     did_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or DID_AGENT_ID
     did, err = did_create_session(did_agent_id)
@@ -417,7 +435,10 @@ def customer_session():
         return jsonify({"error": err}), 500
 
     with db.cursor() as cur:
-        cur.execute("SELECT COUNT(*) as cnt FROM ava_knowledge_base WHERE customer_id=%s", (customer["id"],))
+        cur.execute(
+            "SELECT COUNT(*) as cnt FROM ava_knowledge_base WHERE customer_id=%s",
+            (customer["id"],)
+        )
         knowledge_count = cur.fetchone()["cnt"]
 
     ego = None
@@ -450,8 +471,10 @@ def customer_train():
     customer_id = session["customer_id"]
 
     with db.cursor() as cur:
-        cur.execute("INSERT INTO ava_messages (session_id, customer_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s)",
-                   (session_id, customer_id, "customer", text, datetime.utcnow().isoformat()))
+        cur.execute(
+            "INSERT INTO ava_messages (session_id, customer_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s)",
+            (session_id, customer_id, "customer", text, datetime.utcnow().isoformat())
+        )
     db.commit()
 
     customer = get_customer(db, customer_id)
@@ -461,26 +484,36 @@ def customer_train():
     with db.cursor() as cur:
         for chunk in ego_data.get("raw_chunks", []):
             if chunk.get("chunk"):
-                cur.execute("INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
-                           (customer_id, chunk["chunk"], session_id, chunk.get("category", "fact"), "raw", datetime.utcnow().isoformat()))
+                cur.execute(
+                    "INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+                    (customer_id, chunk["chunk"], session_id, chunk.get("category", "fact"), "raw", datetime.utcnow().isoformat())
+                )
                 chunks_added += 1
         for belief in ego_data.get("beliefs", []):
-            cur.execute("INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
-                       (customer_id, belief, session_id, "belief", "ego", datetime.utcnow().isoformat()))
+            cur.execute(
+                "INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+                (customer_id, belief, session_id, "belief", "ego", datetime.utcnow().isoformat())
+            )
         for value in ego_data.get("values", []):
-            cur.execute("INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
-                       (customer_id, value, session_id, "value", "ego", datetime.utcnow().isoformat()))
+            cur.execute(
+                "INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+                (customer_id, value, session_id, "value", "ego", datetime.utcnow().isoformat())
+            )
     db.commit()
 
     threading.Thread(target=update_ego_model, args=(customer_id, ego_data, text), daemon=True).start()
 
-    return jsonify({"ok": True, "chunks_added": chunks_added,
-                    "beliefs_extracted": len(ego_data.get("beliefs", [])),
-                    "values_extracted": len(ego_data.get("values", []))})
+    return jsonify({
+        "ok": True,
+        "chunks_added": chunks_added,
+        "beliefs_extracted": len(ego_data.get("beliefs", [])),
+        "values_extracted": len(ego_data.get("values", []))
+    })
 
 @app.route("/customer/ego", methods=["GET", "POST"])
 def customer_ego():
-    if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "customer_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     c = get_customer(db, session["customer_id"])
     ego = None
@@ -491,38 +524,50 @@ def customer_ego():
 
 @app.route("/customer/knowledge", methods=["GET", "POST"])
 def customer_knowledge():
-    if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "customer_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("SELECT id, chunk, category, ego_layer, created_at FROM ava_knowledge_base WHERE customer_id=%s ORDER BY created_at DESC",
-                   (session["customer_id"],))
+        cur.execute(
+            "SELECT id, chunk, category, ego_layer, created_at FROM ava_knowledge_base WHERE customer_id=%s ORDER BY created_at DESC",
+            (session["customer_id"],)
+        )
         chunks = cur.fetchall()
     return jsonify([dict(c) for c in chunks])
 
 @app.route("/customer/knowledge/<int:kid>", methods=["GET", "POST", "DELETE"])
 def delete_knowledge(kid):
-    if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "customer_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("DELETE FROM ava_knowledge_base WHERE id=%s AND customer_id=%s", (kid, session["customer_id"]))
+        cur.execute(
+            "DELETE FROM ava_knowledge_base WHERE id=%s AND customer_id=%s",
+            (kid, session["customer_id"])
+        )
     db.commit()
     return jsonify({"ok": True})
 
 @app.route("/customer/sessions", methods=["GET", "POST"])
 def customer_sessions():
-    if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "customer_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("""SELECT s.id, s.session_type, s.started_at, COUNT(m.id) as message_count
-                       FROM ava_sessions s LEFT JOIN ava_messages m ON s.id=m.session_id
-                       WHERE s.customer_id=%s GROUP BY s.id, s.session_type, s.started_at
-                       ORDER BY s.started_at DESC LIMIT 50""", (session["customer_id"],))
+        cur.execute(
+            """SELECT s.id, s.session_type, s.started_at, COUNT(m.id) as message_count
+               FROM ava_sessions s LEFT JOIN ava_messages m ON s.id=m.session_id
+               WHERE s.customer_id=%s GROUP BY s.id, s.session_type, s.started_at
+               ORDER BY s.started_at DESC LIMIT 50""",
+            (session["customer_id"],)
+        )
         rows = cur.fetchall()
     return jsonify([dict(r) for r in rows])
 
 @app.route("/customer/me", methods=["GET", "POST"])
 def customer_me():
-    if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "customer_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     c = get_customer(db, session["customer_id"])
     ego = None
@@ -541,8 +586,10 @@ def admin_login():
         data = request.get_json(silent=True) or {}
         db = get_db()
         with db.cursor() as cur:
-            cur.execute("SELECT * FROM ava_admins WHERE email=%s AND password_hash=%s",
-                       (data.get("email"), hash_pw(data.get("password", ""))))
+            cur.execute(
+                "SELECT * FROM ava_admins WHERE email=%s AND password_hash=%s",
+                (data.get("email"), hash_pw(data.get("password", "")))
+            )
             a = cur.fetchone()
         if a:
             session["admin_id"] = a["id"]
@@ -557,12 +604,14 @@ def admin_logout():
 
 @app.route("/admin/")
 def admin_home():
-    if "admin_id" not in session: return redirect(url_for("admin_login"))
+    if "admin_id" not in session:
+        return redirect(url_for("admin_login"))
     return render_template("admin/index.html")
 
 @app.route("/admin/customers", methods=["GET", "POST"])
 def admin_customers():
-    if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "admin_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     if request.method == "POST":
         data = request.get_json(silent=True) or {}
         db = get_db()
@@ -580,13 +629,16 @@ def admin_customers():
         return jsonify({"ok": True, "id": cid})
     db = get_db()
     with db.cursor() as cur:
-        cur.execute("SELECT id, name, email, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, active, created_at FROM ava_customers ORDER BY created_at DESC")
+        cur.execute(
+            "SELECT id, name, email, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, active, created_at FROM ava_customers ORDER BY created_at DESC"
+        )
         rows = cur.fetchall()
     return jsonify([dict(c) for c in rows])
 
 @app.route("/admin/customer/<cid>/update", methods=["GET", "POST"])
 def admin_update_customer(cid):
-    if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "admin_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     data = request.get_json(silent=True) or {}
     db = get_db()
     with db.cursor() as cur:
@@ -598,7 +650,8 @@ def admin_update_customer(cid):
 
 @app.route("/admin/toggle_customer/<cid>", methods=["GET", "POST"])
 def admin_toggle_customer(cid):
-    if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "admin_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
         cur.execute("UPDATE ava_customers SET active=1-active WHERE id=%s", (cid,))
@@ -607,37 +660,44 @@ def admin_toggle_customer(cid):
 
 @app.route("/admin/stats", methods=["GET", "POST"])
 def admin_stats():
-    if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "admin_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
         stats = {}
-        for table, key in [("ava_customers","total_customers"),("ava_users","total_users"),
-                           ("ava_sessions","total_sessions"),("ava_messages","total_messages"),
-                           ("ava_knowledge_base","total_knowledge_chunks"),("ava_ego_revisions","total_ego_revisions")]:
+        for table, key in [
+            ("ava_customers",     "total_customers"),
+            ("ava_users",         "total_users"),
+            ("ava_sessions",      "total_sessions"),
+            ("ava_messages",      "total_messages"),
+            ("ava_knowledge_base","total_knowledge_chunks"),
+            ("ava_ego_revisions", "total_ego_revisions")
+        ]:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
             stats[key] = cur.fetchone()["count"]
     return jsonify(stats)
 
 @app.route("/admin/customer/<cid>/ego", methods=["GET", "POST"])
 def admin_customer_ego(cid):
-    if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
+    if "admin_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     c = get_customer(db, cid)
-    if not c: return jsonify({"error": "Not found"}), 404
+    if not c:
+        return jsonify({"error": "Not found"}), 404
     ego = None
     if c["ego_model"]:
         try: ego = json.loads(c["ego_model"])
         except: pass
     return jsonify({"name": c["name"], "persona": c["persona_summary"], "ego": ego})
 
-
-
 # ── Avatar thumbnail ──────────────────────────────────────────────────────────
 
 @app.route("/avatar/thumbnail")
 def avatar_thumbnail():
     local = os.path.join(os.path.dirname(__file__), "static", "petar.jpg")
-    if os.path.exists(local): return send_file(local, mimetype="image/jpeg")
+    if os.path.exists(local):
+        return send_file(local, mimetype="image/jpeg")
     return jsonify({"error": "No image"}), 404
 
 if __name__ == "__main__":
