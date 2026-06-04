@@ -93,20 +93,34 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 let sessionId=null, customerId=null;
 
 async function init() {
-  setStatus('Getting session...','#f59e0b');
-  const r=await fetch('/customer/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-  const d=await r.json();
-  if(d.error){document.getElementById('lmsg').textContent='Error: '+d.error;setStatus('Error','#ef4444');return;}
+    setStatus('Getting session...', '#f59e0b');
+    try {
+        const r = await fetch('/customer/session', {method: 'POST', headers: {'Content-Type': 'application/json'}});
+        const d = await r.json();
+        
+        if (d.error) {
+            document.getElementById('lmsg').textContent = 'Error: ' + d.error;
+            setStatus('Error', '#ef4444');
+            return;
+        }
 
-  sessionId=d.session_id; customerId=d.customer_id;
-  document.getElementById('kCount').textContent=d.knowledge_count+' chunks';
-  renderEgo(d.ego_model, d.persona);
-  loadKnowledge(); loadSessions();
+        sessionId = d.session_id; 
+        customerId = d.customer_id;
+        document.getElementById('kCount').textContent = d.knowledge_count + ' chunks';
+        
+        renderEgo(d.ego_model, d.persona);
+        loadKnowledge(); 
+        loadSessions();
 
-  // Show iframe — ElevenLabs agent connector handles voice + video
-  document.getElementById('lmsg').style.display='none';
-  document.getElementById('avatarIframe').style.display='block';
-  setStatus('Connected — everything you say teaches your avatar','#4ade80');
+        // FIX: Match the ID to the one defined in your HTML
+        document.getElementById('lmsg').style.display = 'none';
+        document.getElementById('avatarFrame').style.display = 'block';
+        
+        setStatus('Connected', '#4ade80');
+    } catch (e) {
+        setStatus('Connection failed', '#ef4444');
+        console.error(e);
+    }
 }
 
 async function trainText(text) {
