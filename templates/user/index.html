@@ -113,8 +113,22 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 let camStream=null, userId=null, sessionId=null, customerId=null, livekitRoom=null;
 
 async function connectLiveKit(url, token) {
+  if(livekitRoom) { try { await livekitRoom.disconnect(); } catch(e) {} livekitRoom=null; }
   const { Room, RoomEvent, Track } = window.LivekitClient;
-  livekitRoom = new Room({ adaptiveStream: true, dynacast: true });
+  const c = document.getElementById('avatarContainer');
+  if(c) c.innerHTML = '';
+  livekitRoom = new Room({
+    adaptiveStream: true,
+    dynacast: true,
+    videoCaptureDefaults: { resolution: { width: 1280, height: 720 } }
+  });
+  // Subscribe to all tracks from remote participants
+  livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+    participant.trackPublications.forEach((pub) => { if(!pub.isSubscribed) pub.setSubscribed(true); });
+  });
+  livekitRoom.on(RoomEvent.TrackPublished, (pub, participant) => {
+    if(!pub.isSubscribed) pub.setSubscribed(true);
+  });
   livekitRoom.on(RoomEvent.TrackSubscribed, (track) => {
     if(track.kind === Track.Kind.Video) {
       const el = track.attach();
@@ -210,11 +224,17 @@ async function saveMsg(speaker, text) {
 }
 
 async function goBack() {
-  if(livekitRoom) { try{await livekitRoom.disconnect();}catch(e){} livekitRoom=null; }
+  if(livekitRoom) {
+    try { await livekitRoom.disconnect(); } catch(e) {}
+    livekitRoom = null;
+  }
+  const c = document.getElementById('avatarContainer');
+  if(c) { c.innerHTML=''; }
+  document.getElementById('lmsg').style.display='block';
+  document.getElementById('lmsg').textContent='Connecting...';
   document.getElementById('talk-page').style.display='none';
   document.getElementById('landing').style.display='flex';
-  document.getElementById('lmsg').style.display='';
-  document.getElementById('lmsg').textContent='Connecting...';
+  sessionId=null; customerId=null;
 }
 </script>
 </body>
