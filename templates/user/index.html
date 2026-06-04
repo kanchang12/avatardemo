@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Talk to Petar</title>
+<!-- LiveAvatar Web SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk/dist/index.umd.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;flex-direction:column}
@@ -12,19 +14,21 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .sub{color:#888;font-size:1.05rem;margin-bottom:56px;text-align:center}
 .card{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:24px;overflow:hidden;width:320px;cursor:pointer;transition:all 0.3s;text-align:center}
 .card:hover{border-color:#a78bfa;transform:translateY(-8px);box-shadow:0 20px 60px rgba(167,139,250,0.2)}
-.card img{width:100%;height:380px;object-fit:cover;object-position:top;background:#1e1e2e}
+.card img{width:100%;height:380px;object-fit:cover;object-position:top;background:#1e1e2e;min-height:380px}
 .card .info{padding:22px}
 .card h2{font-size:1.4rem;margin-bottom:8px}
 .card p{color:#888;font-size:0.88rem;line-height:1.6}
-.btn-talk{display:block;margin:14px 20px 20px;padding:14px;background:#a78bfa;color:#fff;border:none;border-radius:12px;font-size:1rem;cursor:pointer;width:calc(100% - 40px);transition:background 0.2s}
+.btn-talk{display:block;margin:14px 20px 20px;padding:14px;background:#a78bfa;color:#fff;border:none;border-radius:12px;font-size:1rem;cursor:pointer;width:calc(100% - 40px)}
 .btn-talk:hover{background:#7c3aed}
+
 #cam-prompt{display:none;position:fixed;inset:0;background:#000d;z-index:100;align-items:center;justify-content:center}
 .cam-box{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:20px;padding:40px;text-align:center;max-width:400px;width:90%}
-.cam-box h2{margin-bottom:10px;font-size:1.3rem}
+.cam-box h2{margin-bottom:10px}
 .cam-box p{color:#888;margin-bottom:22px;font-size:0.88rem;line-height:1.6}
 .cam-box video{width:180px;height:180px;border-radius:50%;object-fit:cover;border:3px solid #a78bfa;display:block;margin:0 auto 22px}
 .btn-p{background:#a78bfa;color:#fff;border:none;padding:11px 28px;border-radius:10px;cursor:pointer;font-size:0.95rem;margin:4px}
 .btn-s{background:transparent;color:#888;border:1px solid #2e2e4e;padding:11px 28px;border-radius:10px;cursor:pointer;font-size:0.95rem;margin:4px}
+
 #talk-page{display:none;flex-direction:column;height:100vh}
 .talk-nav{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid #1e1e2e;background:#0a0a0f}
 .talk-nav button{background:transparent;border:1px solid #2e2e4e;color:#888;padding:6px 16px;border-radius:16px;cursor:pointer;font-size:0.82rem}
@@ -32,32 +36,22 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .live{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:0.8rem;color:#4ade80}
 .dot{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:blink 1.2s infinite}
 .talk-body{display:flex;flex:1;overflow:hidden}
-.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center}
-.vpanel iframe{width:100%;height:100%;border:none}
-.vpanel .lmsg{color:#555}
+.vpanel{flex:1;background:#0f0f1a;position:relative}
+.vpanel video{width:100%;height:100%;object-fit:cover;display:block}
+.vpanel .lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555}
 .side{width:340px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column}
 .ubar{padding:14px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:12px}
 .ucam{width:52px;height:52px;border-radius:50%;overflow:hidden;border:2px solid #2e2e4e;background:#1e1e2e;flex-shrink:0}
 .ucam video{width:100%;height:100%;object-fit:cover}
 .uinfo h3{font-size:0.92rem}
 .uinfo p{font-size:0.78rem;color:#888;margin-top:2px}
-
-/* Voice controls */
-.voice-panel{padding:16px 18px;border-bottom:1px solid #1e1e2e;display:flex;flex-direction:column;gap:10px}
-.voice-status{display:flex;align-items:center;gap:8px;font-size:0.82rem;color:#888}
-.voice-btns{display:flex;gap:8px}
-.mic-btn{flex:1;padding:10px;border:none;border-radius:10px;cursor:pointer;font-size:0.85rem;transition:all 0.2s}
-.mic-btn.start{background:#a78bfa;color:#fff}
-.mic-btn.stop{background:#ef4444;color:#fff}
-.mic-btn:disabled{background:#333;cursor:not-allowed;color:#666}
-
+.status-bar{padding:12px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:8px;font-size:0.82rem;color:#888}
 .chat-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
 .msg{font-size:0.88rem;line-height:1.6}
 .msg .who{font-weight:600;font-size:0.76rem;margin-bottom:3px}
 .msg.user .who{color:#a78bfa}
 .msg.avatar .who{color:#4ade80}
 .msg .text{color:#ccc}
-.cstatus{padding:12px 18px;border-top:1px solid #1e1e2e;font-size:0.8rem;color:#555;display:flex;align-items:center;gap:7px}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
 </style>
 </head>
@@ -67,7 +61,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   <h1>TRIONE</h1>
   <p class="sub">A conversation worth having</p>
   <div class="card" onclick="initTalk()">
-    <img src="/avatar/thumbnail" alt="Petar" onerror="this.style.minHeight='380px'">
+    <img src="/avatar/thumbnail" alt="Petar" onerror="this.style.display='none'">
     <div class="info">
       <h2>Petar</h2>
       <p>Philosopher. Strategist. One of the three founders of a framework for understanding power, identity and the modern world.</p>
@@ -79,7 +73,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 <div id="cam-prompt">
   <div class="cam-box">
     <h2>Welcome</h2>
-    <p>Allow camera so Petar remembers you and continues from where you left off. Your face is stored only as an anonymous pattern.</p>
+    <p>Allow camera so Petar remembers you and continues from where you left off.</p>
     <video id="camPrev" autoplay muted playsinline></video>
     <div>
       <button class="btn-p" onclick="captureAndContinue()">Remember me</button>
@@ -95,7 +89,10 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
     <div class="live"><div class="dot"></div>Live</div>
   </div>
   <div class="talk-body">
-    <div class="vpanel" id="vpanel"><p class="lmsg" id="lmsg">Connecting...</p></div>
+    <div class="vpanel" id="vpanel">
+      <p class="lmsg" id="lmsg">Connecting...</p>
+      <video id="avatarVideo" autoplay playsinline style="display:none"></video>
+    </div>
     <div class="side">
       <div class="ubar">
         <div class="ucam"><video id="userCam" autoplay muted playsinline></video></div>
@@ -104,36 +101,24 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
           <p id="uStatus">New conversation</p>
         </div>
       </div>
-
-      <!-- Voice controls -->
-      <div class="voice-panel">
-        <div class="voice-status"><div class="dot" id="elDot" style="background:#333"></div><span id="elStatus">Not connected</span></div>
-        <div class="voice-btns">
-          <button class="mic-btn start" id="startBtn" onclick="startVoice()">🎤 Start talking</button>
-          <button class="mic-btn stop" id="stopBtn" onclick="stopVoice()" disabled>⬛ Stop</button>
-        </div>
-      </div>
-
+      <div class="status-bar"><div class="dot" id="sDot" style="background:#333"></div><span id="sText">Connecting...</span></div>
       <div class="chat-log" id="chatLog">
-        <div class="msg avatar"><div class="who">Petar</div><div class="text">Hello. I've been expecting someone. Tell me what's on your mind.</div></div>
+        <div class="msg avatar"><div class="who">Petar</div><div class="text">Hello. Tell me what's on your mind.</div></div>
       </div>
-      <div class="cstatus"><div class="dot"></div><span id="cstatusText">Ready</span></div>
     </div>
   </div>
 </div>
 
 <script>
 let camStream=null, userId=null, sessionId=null, customerId=null;
-let elWs=null, micStream=null, audioCtx=null, processor=null;
-let playCtx=null, playQueue=[], playBusy=false;
+let liveAvatarSession=null;
 
-// ── Camera & Identity ─────────────────────────────────────────────────────
 async function initTalk() {
   document.getElementById('cam-prompt').style.display='flex';
   try {
-    camStream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
-    document.getElementById('camPrev').srcObject = camStream;
-  } catch(e) { skipCamera(); }
+    camStream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+    document.getElementById('camPrev').srcObject=camStream;
+  } catch(e){skipCamera();}
 }
 
 async function captureAndContinue() {
@@ -161,138 +146,93 @@ function skipCamera() {
   launchSession();
 }
 
-// ── Session ───────────────────────────────────────────────────────────────
 async function launchSession() {
   document.getElementById('landing').style.display='none';
   document.getElementById('talk-page').style.display='flex';
   try { const s=await navigator.mediaDevices.getUserMedia({video:true}); document.getElementById('userCam').srcObject=s; } catch(e){}
+
+  setStatus('Getting session token...','#f59e0b');
+
   const r=await fetch('/u/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId})});
   const d=await r.json();
-  if(d.error){document.getElementById('lmsg').textContent='Error: '+d.error;return;}
-  sessionId=d.session_id; customerId=d.customer_id;
+  if(d.error){document.getElementById('lmsg').textContent='Error: '+d.error;setStatus('Error','#ef4444');return;}
 
-  if(d.mode==='livekit') {
-    // ElevenLabs Agent Connector — LiveAvatar handles everything via LiveKit
-    // Use the embed URL from session_data if available
-    const embedUrl = d.session_data?.embed_url || d.session_data?.url;
-    if(embedUrl) {
-      const iframe=document.createElement('iframe');
-      iframe.src=embedUrl; iframe.allow='microphone; camera';
-      iframe.style.cssText='width:100%;height:100%;border:none';
-      document.getElementById('lmsg').remove();
-      document.getElementById('vpanel').appendChild(iframe);
-      // Hide manual voice controls — LiveAvatar handles audio
-      document.querySelector('.voice-panel').style.display='none';
-    } else {
-      document.getElementById('lmsg').textContent='Session started — connecting via LiveKit...';
-    }
-  } else {
-    // Embed mode — show iframe + manual voice controls
-    const iframe=document.createElement('iframe');
-    iframe.src=d.embed_url; iframe.allow='microphone; camera';
-    iframe.style.cssText='width:100%;height:100%;border:none';
-    document.getElementById('lmsg').remove();
-    document.getElementById('vpanel').appendChild(iframe);
+  sessionId=d.session_id;
+  customerId=d.customer_id;
+
+  // Use LiveAvatar Web SDK with session token
+  const { LiveAvatarSession } = window.LiveAvatarSDK || window;
+  if(!LiveAvatarSession){
+    document.getElementById('lmsg').textContent='SDK not loaded';
+    setStatus('Error','#ef4444');
+    return;
   }
+
+  setStatus('Starting avatar...','#f59e0b');
+
+  liveAvatarSession = new LiveAvatarSession(d.session_token, {
+    voiceChat: true,
+  });
+
+  liveAvatarSession.on('session.started', () => {
+    setStatus('Connected','#4ade80');
+    document.getElementById('lmsg').style.display='none';
+    document.getElementById('avatarVideo').style.display='block';
+  });
+
+  liveAvatarSession.on('avatar.speak_started', () => setStatus('Petar speaking...','#f59e0b'));
+  liveAvatarSession.on('avatar.speak_ended', () => setStatus('Listening','#4ade80'));
+
+  liveAvatarSession.on('avatar.transcription', (e) => {
+    addMsg('avatar', 'Petar', e.text||e.message||'');
+    if(sessionId&&customerId) saveMsg('avatar', e.text||e.message||'');
+  });
+
+  liveAvatarSession.on('user.transcription', (e) => {
+    addMsg('user', 'You', e.text||e.message||'');
+    if(sessionId&&customerId) saveMsg('user', e.text||e.message||'');
+  });
+
+  liveAvatarSession.on('session.stopped', () => {
+    setStatus('Disconnected','#333');
+  });
+
+  // Attach video element
+  liveAvatarSession.attachVideoElement(document.getElementById('avatarVideo'));
+
+  await liveAvatarSession.start();
 }
 
-// ── ElevenLabs Voice ──────────────────────────────────────────────────────
-async function startVoice() {
-  document.getElementById('startBtn').disabled=true;
-  setEL('Connecting...','#f59e0b');
-  try {
-    const sr=await fetch('/el/signed_url'+(customerId?'?customer_id='+customerId:''));
-    const sd=await sr.json();
-    if(!sd.signed_url){setEL('Auth error','#ef4444');document.getElementById('startBtn').disabled=false;return;}
-    micStream=await navigator.mediaDevices.getUserMedia({audio:{sampleRate:16000,channelCount:1}});
-    audioCtx=new AudioContext({sampleRate:16000});
-    const src=audioCtx.createMediaStreamSource(micStream);
-    processor=audioCtx.createScriptProcessor(4096,1,1);
-    elWs=new WebSocket(sd.signed_url);
-    elWs.onopen=()=>{
-      setEL('Listening','#4ade80');
-      document.getElementById('startBtn').disabled=true;
-      document.getElementById('stopBtn').disabled=false;
-      processor.onaudioprocess=e=>{
-        if(elWs.readyState!==WebSocket.OPEN)return;
-        const f32=e.inputBuffer.getChannelData(0);
-        const i16=new Int16Array(f32.length);
-        for(let i=0;i<f32.length;i++)i16[i]=Math.max(-32768,Math.min(32767,f32[i]*32768));
-        elWs.send(JSON.stringify({user_audio_chunk:btoa(String.fromCharCode(...new Uint8Array(i16.buffer)))}));
-      };
-      src.connect(processor); processor.connect(audioCtx.destination);
-    };
-    elWs.onmessage=ev=>{
-      if(typeof ev.data!=='string')return;
-      const msg=JSON.parse(ev.data);
-      if(msg.type==='audio'&&msg.audio_event?.audio_base_64){
-        setEL('Petar speaking','#f59e0b');
-        playPCM(msg.audio_event.audio_base_64,16000);
-      }
-      if(msg.type==='transcript'&&msg.transcript_event?.text){
-        const t=msg.transcript_event;
-        addMsg(t.speaker==='user'?'user':'avatar', t.speaker==='user'?'You':'Petar', t.text);
-        if(sessionId&&customerId) saveMsg(t.speaker==='user'?'user':'avatar', t.text);
-      }
-      if(msg.type==='interruption'){playQueue=[];playBusy=false;}
-      if(['agent_response_correction','user_transcript'].includes(msg.type))setEL('Listening','#4ade80');
-    };
-    elWs.onerror=()=>setEL('Error','#ef4444');
-    elWs.onclose=()=>{setEL('Disconnected','#333');stopVoice();};
-  } catch(e){setEL('Error: '+e.message,'#ef4444');document.getElementById('startBtn').disabled=false;}
+function setStatus(text, color) {
+  document.getElementById('sText').textContent=text;
+  document.getElementById('sDot').style.background=color;
 }
 
-function stopVoice() {
-  if(elWs){elWs.close();elWs=null;}
-  if(processor){processor.disconnect();processor=null;}
-  if(audioCtx){audioCtx.close();audioCtx=null;}
-  if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
-  playQueue=[];playBusy=false;
-  document.getElementById('startBtn').disabled=false;
-  document.getElementById('stopBtn').disabled=true;
-  setEL('Disconnected','#333');
-}
-
-// ── Audio playback ────────────────────────────────────────────────────────
-function playPCM(b64,sr){playQueue.push({b64,sr});if(!playBusy)drainPlay();}
-function drainPlay(){
-  if(!playQueue.length){playBusy=false;return;}
-  playBusy=true;
-  const{b64,sr}=playQueue.shift();
-  if(!playCtx||playCtx.state==='closed')playCtx=new AudioContext({sampleRate:sr});
-  const raw=atob(b64),u8=new Uint8Array(raw.length);
-  for(let i=0;i<raw.length;i++)u8[i]=raw.charCodeAt(i);
-  const pcm=new Int16Array(u8.buffer);
-  const buf=playCtx.createBuffer(1,pcm.length,sr);
-  const ch=buf.getChannelData(0);
-  for(let i=0;i<pcm.length;i++)ch[i]=pcm[i]/32768;
-  const src=playCtx.createBufferSource();
-  src.buffer=buf;src.connect(playCtx.destination);
-  src.onended=drainPlay;src.start();
-}
-
-// ── UI helpers ────────────────────────────────────────────────────────────
-function setEL(text,color){
-  document.getElementById('elStatus').textContent=text;
-  document.getElementById('elDot').style.background=color;
-}
-function addMsg(cls,who,text){
+function addMsg(cls, who, text) {
+  if(!text) return;
   const log=document.getElementById('chatLog');
   log.innerHTML+=`<div class="msg ${cls}"><div class="who">${who}</div><div class="text">${text}</div></div>`;
   log.scrollTop=log.scrollHeight;
 }
-function renderHistory(history){
-  const log=document.getElementById('chatLog');log.innerHTML='';
+
+function renderHistory(history) {
+  const log=document.getElementById('chatLog'); log.innerHTML='';
   history.forEach(m=>addMsg(m.speaker==='user'?'user':'avatar',m.speaker==='user'?'You':'Petar',m.text));
 }
-async function saveMsg(speaker,text){
+
+async function saveMsg(speaker, text) {
+  if(!text) return;
   await fetch('/u/message',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({session_id:sessionId,customer_id:customerId,user_id:userId,speaker,text})});
 }
-function goBack(){
-  stopVoice();
+
+async function goBack() {
+  if(liveAvatarSession) { try{await liveAvatarSession.stop();}catch(e){} liveAvatarSession=null; }
   document.getElementById('talk-page').style.display='none';
   document.getElementById('landing').style.display='flex';
+  document.getElementById('avatarVideo').style.display='none';
+  document.getElementById('lmsg').style.display='';
+  document.getElementById('lmsg').textContent='Connecting...';
 }
 </script>
 </body>

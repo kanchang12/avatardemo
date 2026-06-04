@@ -146,6 +146,7 @@ async function loadCustomers(){
       <td>
         <button class="tbtn" onclick="toggle('${c.id}')">${c.active?'Disable':'Enable'}</button>
         <button class="tbtn" onclick="viewEgo('${c.id}','${c.name}')">EGO</button>
+        <button class="tbtn" onclick="editCustomer('${c.id}')">Edit</button>
       </td>
     </tr>`).join(''):'<tr><td colspan="7" style="color:#555;text-align:center;padding:20px">No customers yet. Add one above.</td></tr>';
 }
@@ -179,6 +180,19 @@ async function viewEgo(id, name){
   const r=await fetch(`/admin/customer/${id}/ego`);
   const d=await r.json();
   alert(`EGO Model for ${name}:\n\n${d.persona||'No persona yet'}\n\nBeliefs: ${(d.ego?.beliefs||[]).length}\nValues: ${(d.ego?.values||[]).length}\nRelationships: ${Object.keys(d.ego?.relationships||{}).length}`);
+}
+
+function editCustomer(id){
+  const secretId = prompt('Enter ElevenLabs Secret ID (from Step 1):');
+  if(!secretId) return;
+  fetch(`/admin/customer/${id}/update`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({elevenlabs_secret_id: secretId})
+  }).then(r=>r.json()).then(d=>{
+    showToast('Updated!');
+    loadCustomers();
+  });
 }
 
 async function addCustomer(){

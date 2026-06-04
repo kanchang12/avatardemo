@@ -30,8 +30,11 @@ p{color:#888;font-size:0.88rem;margin-bottom:30px}
 </div>
 <script>
 async function login() {
-  const r=await fetch('/customer/login',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('pw').value})});
+  const r=await fetch('/customer/login',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Accept':'application/json'},
+    body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('pw').value})
+  });
   if(r.ok){window.location='/customer/';}
   else{document.getElementById('err').style.display='block';}
 }
