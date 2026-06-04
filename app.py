@@ -119,27 +119,32 @@ def get_first_customer(db):
         return cur.fetchone()
 
 def did_create_session(agent_id=None):
-    """Create a D-ID agent session. Returns session_id and chat token."""
     aid = agent_id or DID_AGENT_ID
     if not aid:
         return None, "Missing DID_AGENT_ID"
-    import base64
-    # DID_API_KEY is already in user:password format
-    auth = base64.b64encode(DID_API_KEY.encode()).decode()
-    r = requests.post(
-        f"https://api.d-id.com/agents/{aid}/sessions",
-        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json", "accept": "application/json"},
-        json={}
-    )
-    print(f"D-ID session create: {r.status_code} {r.text[:300]}")
-    if r.status_code not in [200, 201]:
-        return None, r.text
-    data = r.json()
-    return {
-        "session_id": data.get("id"),
-        "agent_id": aid,
-        "chat_token": data.get("chat_token")
-    }, None
+    
+    # Use the Bearer token as required by D-ID V2
+    headers = {
+        "Authorization": f"Bearer {DID_API_KEY.strip()}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        r = requests.post(
+            f"https://api.d-id.com/agents/{aid}/sessions",
+            headers=headers,
+            json={}
+        )
+        # Log the full response for debugging
+        print(f"D-ID API Response: {r.status_code} - {r.text}")
+        
+        if r.status_code != 200:
+            return None, f"D-ID returned {r.status_code}: {r.text}"
+            
+        data = r.json()
+        return {"session_id": data.get("id"), "chat_token": data.get("chat_token")}, None
+    except Exception as e:
+        return None, str(e)
 
 def gemini(prompt, system=None):
     if not GEMINI_API_KEY: return ""
