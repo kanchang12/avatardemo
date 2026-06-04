@@ -36,71 +36,39 @@ def close_db(e=None):
         except: pass
 
 def init_db():
-    with psycopg2.connect(DATABASE_URL) as db:
-        with db.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS ava_customers (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    email TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    avatar_id TEXT,
-                    elevenlabs_agent_id TEXT,
-                    elevenlabs_secret_id TEXT,
-                    persona_summary TEXT,
-                    ego_model TEXT,
-                    created_at TEXT,
-                    active INTEGER DEFAULT 1
-                );
-                CREATE TABLE IF NOT EXISTS ava_users (
-                    id TEXT PRIMARY KEY,
-                    face_encoding TEXT,
-                    name TEXT DEFAULT 'Guest',
-                    first_seen TEXT,
-                    last_seen TEXT,
-                    visit_count INTEGER DEFAULT 1
-                );
-                CREATE TABLE IF NOT EXISTS ava_sessions (
-                    id TEXT PRIMARY KEY,
-                    customer_id TEXT NOT NULL,
-                    user_id TEXT,
-                    session_type TEXT NOT NULL,
-                    started_at TEXT,
-                    ended_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS ava_messages (
-                    id SERIAL PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    customer_id TEXT NOT NULL,
-                    user_id TEXT,
-                    speaker TEXT NOT NULL,
-                    text TEXT NOT NULL,
-                    timestamp TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS ava_knowledge_base (
-                    id SERIAL PRIMARY KEY,
-                    customer_id TEXT NOT NULL,
-                    chunk TEXT NOT NULL,
-                    source_session_id TEXT,
-                    category TEXT,
-                    ego_layer TEXT,
-                    created_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS ava_ego_revisions (
-                    id SERIAL PRIMARY KEY,
-                    customer_id TEXT NOT NULL,
-                    revision TEXT NOT NULL,
-                    trigger_text TEXT,
-                    created_at TEXT
-                );
-                CREATE TABLE IF NOT EXISTS ava_admins (
-                    id TEXT PRIMARY KEY,
-                    email TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    created_at TEXT
-                );
-            """)
-        db.commit()
+    tables = [
+        """CREATE TABLE IF NOT EXISTS ava_customers (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL, avatar_id TEXT, elevenlabs_agent_id TEXT,
+            elevenlabs_secret_id TEXT, persona_summary TEXT, ego_model TEXT,
+            created_at TEXT, active INTEGER DEFAULT 1)""",
+        """CREATE TABLE IF NOT EXISTS ava_users (
+            id TEXT PRIMARY KEY, face_encoding TEXT, name TEXT DEFAULT 'Guest',
+            first_seen TEXT, last_seen TEXT, visit_count INTEGER DEFAULT 1)""",
+        """CREATE TABLE IF NOT EXISTS ava_sessions (
+            id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, user_id TEXT,
+            session_type TEXT NOT NULL, started_at TEXT, ended_at TEXT)""",
+        """CREATE TABLE IF NOT EXISTS ava_messages (
+            id SERIAL PRIMARY KEY, session_id TEXT NOT NULL, customer_id TEXT NOT NULL,
+            user_id TEXT, speaker TEXT NOT NULL, text TEXT NOT NULL, timestamp TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS ava_knowledge_base (
+            id SERIAL PRIMARY KEY, customer_id TEXT NOT NULL, chunk TEXT NOT NULL,
+            source_session_id TEXT, category TEXT, ego_layer TEXT, created_at TEXT)""",
+        """CREATE TABLE IF NOT EXISTS ava_ego_revisions (
+            id SERIAL PRIMARY KEY, customer_id TEXT NOT NULL, revision TEXT NOT NULL,
+            trigger_text TEXT, created_at TEXT)""",
+        """CREATE TABLE IF NOT EXISTS ava_admins (
+            id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL, created_at TEXT)""",
+    ]
+    for sql in tables:
+        try:
+            with psycopg2.connect(DATABASE_URL) as db:
+                with db.cursor() as cur:
+                    cur.execute(sql)
+                db.commit()
+        except Exception as e:
+            print(f"Table create warning: {e}")
 
 init_db()
 
