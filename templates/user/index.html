@@ -34,7 +34,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .talk-body{display:flex;flex:1;overflow:hidden}
 .vpanel{flex:1;background:#0f0f1a;position:relative}
 #avatarVideo{width:100%;height:100%;object-fit:cover;display:block}
-.lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555;font-size:0.9rem;text-align:center;width:100%}
+.lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555;font-size:0.9rem;text-align:center;width:80%}
 .side{width:340px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column}
 .ubar{padding:14px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:12px}
 .ucam{width:52px;height:52px;border-radius:50%;overflow:hidden;border:2px solid #2e2e4e;background:#1e1e2e;flex-shrink:0}
@@ -119,7 +119,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <script>
 let camStream=null, userId=null, sessionId=null, customerId=null;
-let livekitRoom=null, livekitUrl=null, livekitToken=null;
+let room=null, livekitUrl=null, livekitToken=null;
 
 function initTalk() {
   document.getElementById('cam-prompt').style.display='flex';
@@ -176,44 +176,47 @@ async function launchPage() {
 async function startConversation() {
   document.getElementById('startBtn').disabled=true;
   setStatus('Connecting...','#f59e0b');
-  setMsg('Starting...');
+  setMsg('Starting avatar...');
   try {
-    const { Room, RoomEvent, Track } = LivekitClient;
-    livekitRoom = new Room();
+    room = new LivekitClient.Room({ adaptiveStream:true, dynacast:true });
 
-    livekitRoom.on(RoomEvent.TrackSubscribed, (track, pub, participant) => {
-      if(track.kind===Track.Kind.Video) {
-        const videoEl=document.getElementById('avatarVideo');
-        track.attach(videoEl);
+    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+      if(track.kind === LivekitClient.Track.Kind.Video) {
+        track.attach(document.getElementById('avatarVideo'));
         setMsg('');
         setStatus('Live','#4ade80');
         document.getElementById('endBtn').disabled=false;
       }
-      if(track.kind===Track.Kind.Audio) track.attach();
+      if(track.kind === LivekitClient.Track.Kind.Audio) {
+        track.attach();
+      }
     });
 
-    livekitRoom.on(RoomEvent.DataReceived, (data) => {
+    room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
       try {
-        const msg=JSON.parse(new TextDecoder().decode(data));
-        if(msg.event_type==='avatar.transcription'&&msg.text) {
-          addMsg('avatar','Petar',msg.text);
-          saveMsg('avatar',msg.text);
-        }
-        if(msg.event_type==='user.transcription'&&msg.text) {
-          addMsg('user','You',msg.text);
-          saveMsg('user',msg.text);
+        const msg = JSON.parse(new TextDecoder().decode(payload));
+        // LiveAvatar sends events on topic 'agent-response'
+        if(topic === 'agent-response') {
+          if(msg.event_type==='avatar.transcription' && msg.text) {
+            addMsg('avatar','Petar',msg.text);
+            saveMsg('avatar',msg.text);
+          }
+          if(msg.event_type==='user.transcription' && msg.text) {
+            addMsg('user','You',msg.text);
+            saveMsg('user',msg.text);
+          }
         }
       } catch(e){}
     });
 
-    livekitRoom.on(RoomEvent.Disconnected, ()=>{
+    room.on(LivekitClient.RoomEvent.Disconnected, () => {
       setStatus('Ended','#888');
       document.getElementById('startBtn').disabled=false;
       document.getElementById('endBtn').disabled=true;
     });
 
-    await livekitRoom.connect(livekitUrl, livekitToken);
-    await livekitRoom.localParticipant.setMicrophoneEnabled(true);
+    await room.connect(livekitUrl, livekitToken);
+    await room.localParticipant.setMicrophoneEnabled(true);
 
   } catch(e) {
     setStatus('Error','#ef4444');
@@ -224,7 +227,7 @@ async function startConversation() {
 }
 
 async function endConversation() {
-  if(livekitRoom){await livekitRoom.disconnect();livekitRoom=null;}
+  if(room){await room.disconnect();room=null;}
   document.getElementById('endBtn').disabled=true;
   document.getElementById('startBtn').disabled=false;
   setStatus('Ended','#888');
@@ -237,10 +240,10 @@ async function saveMsg(speaker,text) {
 }
 
 function goBack() {
-  if(livekitRoom){livekitRoom.disconnect();livekitRoom=null;}
+  if(room){room.disconnect();room=null;}
   document.getElementById('talk-page').style.display='none';
   document.getElementById('landing').style.display='flex';
-  sessionId=null;customerId=null;
+  sessionId=null;customerId=null;livekitUrl=null;livekitToken=null;
 }
 
 function setStatus(text,color){document.getElementById('sText').textContent=text;document.getElementById('sDot').style.background=color;}
