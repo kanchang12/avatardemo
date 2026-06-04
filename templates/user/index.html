@@ -89,7 +89,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   <div class="talk-body">
     <div class="vpanel">
       <p class="lmsg" id="lmsg">Connecting...</p>
-      <div id="avatarContainer"></div>
+      <div id="avatarContainer"><video id="avatarVideo" autoplay playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video></div>
     </div>
     <div class="side">
       <div class="ubar">
@@ -181,8 +181,8 @@ async function launchSession() {
       if (text) { addMsg('user', 'You', text); saveMsg('user', text); }
     });
 
-    const container = document.getElementById('avatarContainer');
-    await liveSession.start(container);
+    const videoEl = document.getElementById('avatarVideo');
+    await liveSession.start(videoEl);
     setStatus('Live', '#4ade80');
 
   } catch(e) {
