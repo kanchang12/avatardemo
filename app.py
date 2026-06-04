@@ -185,7 +185,8 @@ Extract and return ONLY valid JSON, no markdown:
 
 def update_ego_model(customer_id, new_ego_data, trigger_text):
     with psycopg2.connect(DATABASE_URL) as db:
-        with db.cursor() as cur:
+        db.autocommit = False
+        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("SELECT ego_model, persona_summary FROM ava_customers WHERE id=%s", (customer_id,))
             row = cur.fetchone()
             existing = {}
