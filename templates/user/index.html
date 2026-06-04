@@ -123,11 +123,23 @@ async function connectLiveKit(url, token) {
     videoCaptureDefaults: { resolution: { width: 1280, height: 720 } }
   });
   // Subscribe to all tracks from remote participants
+  function attachVideoTrack(track) {
+    if(track.kind !== Track.Kind.Video) return;
+    const el = track.attach();
+    el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    const container = document.getElementById('avatarContainer') || document.getElementById('vpanel');
+    if(container) { container.innerHTML=''; container.appendChild(el); }
+    document.getElementById('lmsg').style.display='none';
+  }
+
   livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-    participant.trackPublications.forEach((pub) => { if(!pub.isSubscribed) pub.setSubscribed(true); });
+    participant.trackPublications.forEach((pub) => {
+      if(pub.track) attachVideoTrack(pub.track);
+      else pub.setSubscribed(true);
+    });
   });
   livekitRoom.on(RoomEvent.TrackPublished, (pub, participant) => {
-    if(!pub.isSubscribed) pub.setSubscribed(true);
+    pub.setSubscribed(true);
   });
   livekitRoom.on(RoomEvent.TrackSubscribed, (track) => {
     if(track.kind === Track.Kind.Video) {
@@ -142,6 +154,38 @@ async function connectLiveKit(url, token) {
   });
   livekitRoom.on(RoomEvent.Disconnected, () => setStatus('Disconnected','#333'));
   await livekitRoom.connect(url, token);
+
+  // Handle tracks already in room at connect time
+  livekitRoom.remoteParticipants.forEach((participant) => {
+    participant.trackPublications.forEach((pub) => {
+      if(pub.isSubscribed && pub.track) {
+        attachVideoTrack(pub.track);
+      } else {
+        pub.setSubscribed(true);
+      }
+    });
+  });
+
+  // Poll for avatar track — ElevenLabs connector may publish after connect
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    let found = false;
+    livekitRoom.remoteParticipants.forEach((participant) => {
+      participant.trackPublications.forEach((pub) => {
+        if(pub.kind === 'video') {
+          found = true;
+          if(pub.isSubscribed && pub.track) {
+            attachVideoTrack(pub.track);
+            clearInterval(poll);
+          } else {
+            pub.setSubscribed(true);
+          }
+        }
+      });
+    });
+    if(attempts > 30) clearInterval(poll);
+  }, 1000);
 }
 
 async function initTalk() {
