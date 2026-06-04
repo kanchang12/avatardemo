@@ -90,7 +90,7 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { createSession, SessionModeEnum, AgentEventsEnum } from 'https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/+esm';
+import { LiveAvatarSession } from 'https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/+esm';
 
 let sessionId = null, customerId = null, liveSession = null;
 
@@ -111,23 +111,18 @@ async function init() {
     const la = d.la_session;
     document.getElementById('lmsg').style.display = 'none';
 
-    liveSession = await createSession({
-      token: la.token || la.access_token || la.livekit_token,
-      serverUrl: la.server_url || la.livekit_url || la.url,
-      container: document.getElementById('avatarContainer'),
-      mode: SessionModeEnum.LITE,
+    const token = la.token || la.access_token || la.livekit_token || la.session_token;
+    liveSession = new LiveAvatarSession(token, { voiceChat: true });
+
+    liveSession.on('connected', () => setStatus('Live', '#4ade80'));
+    liveSession.on('disconnected', () => setStatus('Disconnected', '#ef4444'));
+    liveSession.on('user_transcript', (data) => {
+      const text = data?.text || data?.user_transcript || '';
+      if (text) trainText(text);
     });
 
-    liveSession.on(AgentEventsEnum.CONNECTED, () => setStatus('Live', '#4ade80'));
-    liveSession.on(AgentEventsEnum.DISCONNECTED, () => setStatus('Disconnected', '#ef4444'));
-
-    liveSession.on(AgentEventsEnum.ELEVENLABS_AGENT_EVENT, (evt) => {
-      if (evt.elevenlabs_event_type === 'user_transcript' && evt.data?.user_transcript) {
-        trainText(evt.data.user_transcript);
-      }
-    });
-
-    await liveSession.connect();
+    const container = document.getElementById('avatarContainer');
+    await liveSession.start(container);
     setStatus('Live', '#4ade80');
 
   } catch(e) {
