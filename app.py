@@ -119,17 +119,16 @@ def get_first_customer(db):
         return cur.fetchone()
 
 def did_create_session(agent_id=None):
-    """Create a D-ID agent session. Returns session_id and chat token."""
+    """Create a D-ID agent session using standard Bearer authentication."""
     aid = agent_id or DID_AGENT_ID
     if not aid:
         return None, "Missing DID_AGENT_ID"
     
-    # Ensure the header includes the 'Basic' prefix and a space
-    # The API expects: Authorization: Basic <base64_encoded_key>
-    auth = base64.b64encode(DID_API_KEY.encode()).decode()
+    # D-ID API expects 'Authorization: Bearer <your_api_key>'
+    # Ensure DID_API_KEY is just the raw string from your .env
     headers = {
-        "Authorization": f"Basic {auth}", 
-        "Content-Type": "application/json", 
+        "Authorization": f"Bearer {DID_API_KEY.strip()}",
+        "Content-Type": "application/json",
         "accept": "application/json"
     }
     
