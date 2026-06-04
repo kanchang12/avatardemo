@@ -93,21 +93,49 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 let sessionId=null, customerId=null, livekitRoom=null;
 
 async function connectLiveKit(url, token) {
+  if(livekitRoom) { try { await livekitRoom.disconnect(); } catch(e) {} livekitRoom=null; }
   const { Room, RoomEvent, Track } = window.LivekitClient;
-  livekitRoom = new Room({ adaptiveStream: true, dynacast: true });
+  const c = document.getElementById('avatarContainer');
+  if(c) c.innerHTML = '';
+  livekitRoom = new Room({
+    adaptiveStream: true,
+    dynacast: true,
+    videoCaptureDefaults: { resolution: { width: 1280, height: 720 } }
+  });
+  // Subscribe to all tracks from remote participants
+  function attachVideoTrack(track) {
+    if(track.kind !== Track.Kind.Video) return;
+    const el = track.attach();
+    el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    const container = document.getElementById('avatarContainer') || document.getElementById('vpanel');
+    if(container) { container.innerHTML=''; container.appendChild(el); }
+    document.getElementById('lmsg').style.display='none';
+  }
+
+  livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+    participant.trackPublications.forEach((pub) => {
+      if(pub.track) attachVideoTrack(pub.track);
+      else pub.setSubscribed(true);
+    });
+  });
+  livekitRoom.on(RoomEvent.TrackPublished, (pub, participant) => {
+    pub.setSubscribed(true);
+  });
   livekitRoom.on(RoomEvent.TrackSubscribed, (track) => {
     if(track.kind === Track.Kind.Video) {
-      const el = track.attach();
-      el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-      const c = document.getElementById('avatarContainer');
-      c.innerHTML = '';
-      c.appendChild(el);
-      document.getElementById('lmsg').style.display='none';
+      attachVideoTrack(track);
       setStatus('Connected — everything you say teaches your avatar','#4ade80');
     }
   });
   livekitRoom.on(RoomEvent.Disconnected, () => setStatus('Disconnected','#333'));
   await livekitRoom.connect(url, token);
+  // Handle tracks already in room at connect time
+  livekitRoom.remoteParticipants.forEach((participant) => {
+    participant.trackPublications.forEach((pub) => {
+      if(pub.track) attachVideoTrack(pub.track);
+      else pub.setSubscribed(true);
+    });
+  });
 }
 
 async function init() {
