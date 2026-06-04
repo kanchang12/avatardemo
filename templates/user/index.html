@@ -207,67 +207,113 @@ async function startVoice() {
   document.getElementById('voiceBtn').disabled = true;
 
   try {
-    await navigator.mediaDevices.getUserMedia({audio: true});
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const wsUrl = signedUrl || `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${elAgentId}`;
+    const ws = new WebSocket(wsUrl);
+    conversation = ws;
 
-    const { Conversation } = await import('https://cdn.jsdelivr.net/npm/@11labs/client@latest/dist/index.js');
+    const audioCtx = new AudioContext({ sampleRate: 16000 });
+    const audioQueue = [];
+    let isPlaying = false;
 
-    conversation = await Conversation.startSession({
-      signedUrl: signedUrl || undefined,
-      agentId: signedUrl ? undefined : elAgentId,
+    async function playNext() {
+      if (isPlaying || audioQueue.length === 0) return;
+      isPlaying = true;
+      const pcm = audioQueue.shift();
+      const buf = audioCtx.createBuffer(1, pcm.length, 16000);
+      buf.copyToChannel(pcm, 0);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.onended = () => { isPlaying = false; playNext(); };
+      src.start();
+    }
 
-      onConnect: () => {
-        isVoiceConnected = true;
-        document.getElementById('voiceBtn').disabled = false;
-        document.getElementById('voiceBtn').classList.add('active');
-        document.getElementById('voiceBtnIcon').textContent = '⏹';
-        document.getElementById('voiceBtnText').textContent = 'End Voice';
-        setStatus('Live', '#4ade80');
-        document.getElementById('lmsg').style.display = 'none';
-      },
+    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    conversation._processor = { stream, mediaRecorder };
 
-      onDisconnect: () => {
-        isVoiceConnected = false;
-        conversation = null;
-        document.getElementById('voiceBtn').disabled = false;
-        document.getElementById('voiceBtn').classList.remove('active');
-        document.getElementById('voiceBtnIcon').textContent = '🎙';
-        document.getElementById('voiceBtnText').textContent = 'Start Voice';
-        setStatus('Ready', '#4ade80');
-      },
+    ws.onopen = () => {
+      isVoiceConnected = true;
+      document.getElementById('voiceBtn').disabled = false;
+      document.getElementById('voiceBtn').classList.add('active');
+      document.getElementById('voiceBtnIcon').textContent = '⏹';
+      document.getElementById('voiceBtnText').textContent = 'End Voice';
+      setStatus('Live', '#4ade80');
+      document.getElementById('lmsg').style.display = 'none';
+      ws.send(JSON.stringify({ type: 'conversation_initiation_client_data' }));
+      mediaRecorder.ondataavailable = async (e) => {
+        if (ws.readyState !== 1 || !e.data.size) return;
+        const ab = await e.data.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
+        ws.send(JSON.stringify({ user_audio_chunk: b64 }));
+      };
+      mediaRecorder.start(250);
+    };
 
-      onMessage: (msg) => {
-        const isAgent = msg.type === 'agent_response';
-        const isUser  = msg.type === 'user_transcript';
-        if (isAgent || isUser) {
-          const text = msg.message || msg.text || '';
-          if (text) {
-            addMsg(isAgent ? 'avatar' : 'user', isAgent ? 'Petar' : 'You', text);
-            if (sessionId && customerId) {
-              fetch('/u/message', {method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({session_id: sessionId, customer_id: customerId,
-                  user_id: userId, speaker: isAgent ? 'avatar' : 'user', text})
-              }).catch(()=>{});
-            }
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'audio' && msg.audio_event?.audio_base_64) {
+          const raw = atob(msg.audio_event.audio_base_64);
+          const pcm = new Float32Array(raw.length / 2);
+          for (let i = 0; i < pcm.length; i++) {
+            const lo = raw.charCodeAt(i * 2);
+            const hi = raw.charCodeAt(i * 2 + 1);
+            const s = (hi << 8) | lo;
+            pcm[i] = s >= 32768 ? (s - 65536) / 32768 : s / 32768;
           }
+          audioQueue.push(pcm);
+          playNext();
         }
-      },
+        if (msg.type === 'agent_response' && msg.agent_response_event?.agent_response) {
+          const text = msg.agent_response_event.agent_response;
+          addMsg('avatar', 'Petar', text);
+          if (sessionId) fetch('/u/message', {method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({session_id:sessionId, customer_id:customerId, user_id:userId, speaker:'avatar', text})}).catch(()=>{});
+        }
+        if (msg.type === 'user_transcript' && msg.user_transcription_event?.user_transcript) {
+          const text = msg.user_transcription_event.user_transcript;
+          addMsg('user', 'You', text);
+          if (sessionId) fetch('/u/message', {method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({session_id:sessionId, customer_id:customerId, user_id:userId, speaker:'user', text})}).catch(()=>{});
+        }
+      } catch(e) {}
+    };
 
-      onError: (err) => {
-        console.error('ElevenLabs error:', err);
-        setStatus('Voice error', '#ef4444');
-        document.getElementById('voiceBtn').disabled = false;
-      }
-    });
+    ws.onclose = () => {
+      isVoiceConnected = false;
+      conversation = null;
+      stream.getTracks().forEach(t => t.stop());
+      document.getElementById('voiceBtn').disabled = false;
+      document.getElementById('voiceBtn').classList.remove('active');
+      document.getElementById('voiceBtnIcon').textContent = '🎙';
+      document.getElementById('voiceBtnText').textContent = 'Start Voice';
+      setStatus('Ready', '#4ade80');
+      document.getElementById('lmsg').style.display = 'block';
+      document.getElementById('lmsg').textContent = 'Click Start Voice to talk';
+    };
 
-  } catch(e) {
+    ws.onerror = (err) => {
+      console.error('WS error:', err);
+      setStatus('Voice error', '#ef4444');
+      document.getElementById('voiceBtn').disabled = false;
+    };
+
+  } catch (e) {
     setStatus('Could not start voice', '#ef4444');
     document.getElementById('voiceBtn').disabled = false;
     console.error(e);
   }
 }
-
 async function stopVoice() {
-  if (conversation) await conversation.endSession();
+  if (conversation) {
+    if (conversation._processor) {
+      conversation._processor.mediaRecorder.stop();
+      conversation._processor.stream.getTracks().forEach(t => t.stop());
+    }
+    conversation.close();
+    conversation = null;
+  }
 }
 
 function setStatus(text, color) {
