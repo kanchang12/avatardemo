@@ -129,13 +129,38 @@ async function connectLiveKit(url, token) {
   });
   livekitRoom.on(RoomEvent.Disconnected, () => setStatus('Disconnected','#333'));
   await livekitRoom.connect(url, token);
+
   // Handle tracks already in room at connect time
   livekitRoom.remoteParticipants.forEach((participant) => {
     participant.trackPublications.forEach((pub) => {
-      if(pub.track) attachVideoTrack(pub.track);
-      else pub.setSubscribed(true);
+      if(pub.isSubscribed && pub.track) {
+        attachVideoTrack(pub.track);
+      } else {
+        pub.setSubscribed(true);
+      }
     });
   });
+
+  // Poll for avatar track — ElevenLabs connector may publish after connect
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    let found = false;
+    livekitRoom.remoteParticipants.forEach((participant) => {
+      participant.trackPublications.forEach((pub) => {
+        if(pub.kind === 'video') {
+          found = true;
+          if(pub.isSubscribed && pub.track) {
+            attachVideoTrack(pub.track);
+            clearInterval(poll);
+          } else {
+            pub.setSubscribed(true);
+          }
+        }
+      });
+    });
+    if(attempts > 30) clearInterval(poll);
+  }, 1000);
 }
 
 async function init() {
