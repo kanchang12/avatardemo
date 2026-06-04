@@ -13,7 +13,18 @@ nav h1{color:#a78bfa;font-size:1.05rem;letter-spacing:2px;flex:1}
 nav a{color:#888;font-size:0.8rem;text-decoration:none;padding:5px 14px;border:1px solid #2e2e4e;border-radius:14px}
 nav a:hover{border-color:#a78bfa;color:#a78bfa}
 .layout{display:flex;flex:1;overflow:hidden;height:calc(100vh - 50px)}
-.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center;min-height:0}
+.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}
+.avatar-ring{width:200px;height:200px;border-radius:50%;border:3px solid #2e2e4e;overflow:hidden;position:relative;flex-shrink:0}
+.avatar-ring img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar-ring .pulse{position:absolute;inset:0;border-radius:50%;border:3px solid #a78bfa;opacity:0;pointer-events:none}
+.avatar-ring.speaking .pulse{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%{transform:scale(1);opacity:0.8}100%{transform:scale(1.2);opacity:0}}
+.voice-btn{display:flex;align-items:center;gap:10px;background:#a78bfa;color:#fff;border:none;border-radius:50px;padding:13px 30px;font-size:0.95rem;cursor:pointer;font-weight:600;transition:background 0.2s}
+.voice-btn:hover{background:#9061f9}
+.voice-btn:disabled{background:#2e2e4e;cursor:not-allowed;color:#555}
+.voice-btn.active{background:#ef4444}
+.voice-btn.active:hover{background:#dc2626}
+.transcript{max-width:400px;text-align:center;font-size:0.85rem;color:#888;line-height:1.6;min-height:44px;padding:0 20px}
 .side{width:400px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
 .status-section{padding:12px 16px;border-bottom:1px solid #1e1e2e;flex-shrink:0;display:flex;align-items:center;gap:8px}
 .sdot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0}
@@ -62,14 +73,24 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 </nav>
 
 <div class="layout">
-  <!-- Avatar panel — D-ID embed targets this div -->
-  <div class="vpanel" id="vpanel"></div>
+  <!-- LEFT: D-ID avatar face + ElevenLabs voice controls -->
+  <div class="vpanel">
+    <div class="avatar-ring" id="avatarRing">
+      <img src="/avatar/thumbnail" onerror="this.style.display='none'" alt="Avatar">
+      <div class="pulse"></div>
+    </div>
+    <button class="voice-btn" id="voiceBtn" onclick="toggleConversation()" disabled>
+      <span id="voiceBtnIcon">🎙</span>
+      <span id="voiceBtnText">Start Conversation</span>
+    </button>
+    <div class="transcript" id="transcript">Initialising...</div>
+  </div>
 
-  <!-- Sidebar — single, inside layout -->
+  <!-- RIGHT: EGO / Knowledge / Sessions sidebar -->
   <div class="side">
     <div class="status-section">
       <div class="sdot" id="sDot"></div>
-      <span class="stext" id="sText">Initialising...</span>
+      <span class="stext" id="sText">Connecting...</span>
     </div>
     <div class="tabs">
       <div class="tab active" onclick="switchTab('ego',this)">EGO</div>
@@ -89,10 +110,12 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 <div class="toast" id="toast"></div>
 
 <script>
-let sessionId = null, customerId = null;
+let sessionId = null, customerId = null, signedUrl = null, elAgentId = null;
+let conversation = null, isConnected = false;
 
 async function init() {
   setStatus('Getting session...', '#f59e0b');
+  setTranscript('Connecting...');
 
   try {
     const r = await fetch('/customer/session', {
@@ -100,42 +123,147 @@ async function init() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({})
     });
-
     const d = await r.json();
 
     if (!r.ok || d.error) {
       setStatus('Error: ' + (d.error || 'Server error'), '#ef4444');
-      console.error('Session error:', d.error);
+      setTranscript('Failed to connect. Please refresh.');
       return;
     }
 
-    sessionId  = d.session_id;
-    customerId = d.customer_id;
+    sessionId   = d.session_id;
+    customerId  = d.customer_id;
+    signedUrl   = d.signed_url;
+    elAgentId   = d.elevenlabs_agent_id;
 
     document.getElementById('kCount').textContent = d.knowledge_count + ' chunks';
     renderEgo(d.ego_model, d.persona);
     loadKnowledge();
     loadSessions();
-    setStatus('Avatar Active', '#4ade80');
+
+    setStatus('Ready', '#4ade80');
+    setTranscript('Click "Start Conversation" to talk to your avatar.');
+    document.getElementById('voiceBtn').disabled = false;
 
   } catch (e) {
     setStatus('Connection error', '#ef4444');
+    setTranscript('Network error. Please refresh.');
     console.error('Init failed:', e);
   }
 }
 
+async function toggleConversation() {
+  if (!isConnected) {
+    await startConversation();
+  } else {
+    await stopConversation();
+  }
+}
+
+async function startConversation() {
+  setStatus('Connecting...', '#f59e0b');
+  setTranscript('Requesting microphone access...');
+  document.getElementById('voiceBtn').disabled = true;
+
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    const { Conversation } = await import('https://cdn.jsdelivr.net/npm/@11labs/client@latest/dist/index.js');
+
+    conversation = await Conversation.startSession({
+      signedUrl: signedUrl || undefined,
+      agentId: signedUrl ? undefined : elAgentId,
+
+      onConnect: () => {
+        isConnected = true;
+        document.getElementById('voiceBtn').disabled = false;
+        document.getElementById('voiceBtn').classList.add('active');
+        document.getElementById('voiceBtnIcon').textContent = '⏹';
+        document.getElementById('voiceBtnText').textContent = 'End Conversation';
+        setStatus('Live', '#4ade80');
+        setTranscript('Connected — speak now.');
+      },
+
+      onDisconnect: () => {
+        isConnected = false;
+        conversation = null;
+        document.getElementById('voiceBtn').disabled = false;
+        document.getElementById('voiceBtn').classList.remove('active');
+        document.getElementById('avatarRing').classList.remove('speaking');
+        document.getElementById('voiceBtnIcon').textContent = '🎙';
+        document.getElementById('voiceBtnText').textContent = 'Start Conversation';
+        setStatus('Ready', '#4ade80');
+        setTranscript('Conversation ended. Click to start again.');
+        setTimeout(() => loadKnowledge(), 3000);
+      },
+
+      onMessage: (msg) => {
+        const isAgent = msg.type === 'agent_response';
+        const isUser  = msg.type === 'user_transcript';
+        if (isAgent || isUser) {
+          const speaker = isAgent ? 'Avatar' : 'You';
+          const text    = msg.message || msg.text || '';
+          if (text) {
+            setTranscript(`${speaker}: ${text}`);
+            saveMessage(isAgent ? 'avatar' : 'user', text);
+            if (isUser) trainText(text);
+          }
+        }
+      },
+
+      onModeChange: (mode) => {
+        if (mode.mode === 'speaking') {
+          document.getElementById('avatarRing').classList.add('speaking');
+        } else {
+          document.getElementById('avatarRing').classList.remove('speaking');
+        }
+      },
+
+      onError: (err) => {
+        console.error('ElevenLabs error:', err);
+        setStatus('Error', '#ef4444');
+        setTranscript('Error: ' + (err.message || String(err)));
+        document.getElementById('voiceBtn').disabled = false;
+      }
+    });
+
+  } catch (e) {
+    setStatus('Error', '#ef4444');
+    setTranscript('Could not start: ' + e.message);
+    document.getElementById('voiceBtn').disabled = false;
+    console.error(e);
+  }
+}
+
+async function stopConversation() {
+  if (conversation) {
+    await conversation.endSession();
+  }
+}
+
+async function saveMessage(speaker, text) {
+  try {
+    await fetch('/u/message', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ session_id: sessionId, customer_id: customerId, speaker, text })
+    });
+  } catch(e) {}
+}
+
 async function trainText(text) {
   if (!text.trim() || !sessionId) return;
-  const r = await fetch('/customer/train', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({text, session_id: sessionId, context: 'voice conversation with own avatar'})
-  });
-  const d = await r.json();
-  if (d.chunks_added > 0 || d.beliefs_extracted > 0) {
-    showToast(`EGO updated: +${d.chunks_added} chunks, +${d.beliefs_extracted} beliefs`);
-    setTimeout(() => { loadKnowledge(); }, 2500);
-  }
+  try {
+    const r = await fetch('/customer/train', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text, session_id: sessionId, context: 'voice conversation with own avatar' })
+    });
+    const d = await r.json();
+    if (d.chunks_added > 0 || d.beliefs_extracted > 0) {
+      showToast(`EGO updated: +${d.chunks_added} chunks, +${d.beliefs_extracted} beliefs`);
+    }
+  } catch(e) {}
 }
 
 async function trainManual() {
@@ -143,6 +271,7 @@ async function trainManual() {
   if (!text) return;
   document.getElementById('trainText').value = '';
   await trainText(text);
+  await loadKnowledge();
 }
 
 async function loadKnowledge() {
@@ -234,6 +363,10 @@ function setStatus(text, color) {
   document.getElementById('sDot').style.background = color;
 }
 
+function setTranscript(text) {
+  document.getElementById('transcript').textContent = text;
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -243,16 +376,6 @@ function showToast(msg) {
 
 setInterval(() => { if (sessionId) loadKnowledge(); }, 30000);
 init();
-</script>
-
-<!-- D-ID embed — must come after #vpanel exists in DOM -->
-<script type="module"
-  src="https://agent.d-id.com/v2/index.js"
-  data-mode="full"
-  data-client-key="ck_9GCDUOVmW_bakvKO_Vw8e"
-  data-agent-id="v2_agt_jgKxLh3e"
-  data-monitor="true"
-  data-target-id="vpanel">
 </script>
 </body>
 </html>
