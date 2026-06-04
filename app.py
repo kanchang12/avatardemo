@@ -18,8 +18,8 @@ DATABASE_URL    = os.getenv("DATABASE_URL")
 GEMINI_API_KEY  = os.getenv("GEMINI_API_KEY")
 ELEVENLABS_API_KEY  = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
-LIVEAVATAR_API_KEY  = os.getenv("LIVEAVATAR_API_KEY")
-LIVEAVATAR_AVATAR_ID = os.getenv("LIVEAVATAR_AVATAR_ID")
+DID_API_KEY = os.getenv("DID_API_KEY")
+DID_AGENT_ID = os.getenv("DID_AGENT_ID")
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -93,14 +93,13 @@ seed_admin()
 # ── Seed customer from env ────────────────────────────────────────────────────
 
 def seed_customer():
-    avatar_id = LIVEAVATAR_AVATAR_ID
-    agent_id  = ELEVENLABS_AGENT_ID
-    if not avatar_id or not agent_id:
+    agent_id = DID_AGENT_ID
+    if not agent_id:
         return
     with psycopg2.connect(DATABASE_URL) as db:
         with db.cursor() as cur:
-            cur.execute("UPDATE ava_customers SET avatar_id=%s, elevenlabs_agent_id=%s WHERE avatar_id IS NULL OR avatar_id=''",
-                        (avatar_id, agent_id))
+            cur.execute("UPDATE ava_customers SET elevenlabs_agent_id=%s WHERE elevenlabs_agent_id IS NULL OR elevenlabs_agent_id=''",
+                        (agent_id,))
         db.commit()
 
 seed_customer()
@@ -119,39 +118,25 @@ def get_first_customer(db):
         cur.execute("SELECT * FROM ava_customers WHERE active=1 LIMIT 1")
         return cur.fetchone()
 
-def liveavatar_session_token(avatar_id, elevenlabs_secret_id, elevenlabs_agent_id):
-    # Step 1: Create session token
+def did_create_session(agent_id=None):
+    """Create a D-ID agent session. Returns session_id and chat token."""
+    aid = agent_id or DID_AGENT_ID
+    if not aid:
+        return None, "Missing DID_AGENT_ID"
+    import base64
+    auth = base64.b64encode(f"{DID_API_KEY}:".encode()).decode()
     r = requests.post(
-        "https://api.liveavatar.com/v1/sessions/token",
-        headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
-        json={
-            "avatar_id": avatar_id,
-            "mode": "LITE",
-            "elevenlabs_agent_config": {
-                "secret_id": elevenlabs_secret_id.strip(),
-                "agent_id": elevenlabs_agent_id.strip()
-            }
-        }
+        f"https://api.d-id.com/agents/{aid}/sessions",
+        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+        json={}
     )
     if r.status_code not in [200, 201]:
         return None, r.text
-    token = r.json().get("data", {}).get("session_token") or r.json().get("session_token")
-    if not token:
-        return None, f"No session_token in response: {r.text}"
-
-    # Step 2: Start session to get LiveKit credentials
-    r2 = requests.post(
-        "https://api.liveavatar.com/v1/sessions/start",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    )
-    if r2.status_code not in [200, 201]:
-        return None, r2.text
-    data = r2.json().get("data", {})
+    data = r.json()
     return {
-        "session_token": token,
-        "session_id": data.get("session_id"),
-        "livekit_url": data.get("livekit_url"),
-        "livekit_client_token": data.get("livekit_client_token")
+        "session_id": data.get("id"),
+        "agent_id": aid,
+        "chat_token": data.get("chat_token")
     }, None
 
 def gemini(prompt, system=None):
@@ -340,21 +325,16 @@ def user_session():
                    (session_id, customer["id"], user_id, "user_chat", datetime.utcnow().isoformat()))
     db.commit()
 
-    avatar_id  = (customer["avatar_id"] or "").strip() or LIVEAVATAR_AVATAR_ID
-    secret_id  = (customer["elevenlabs_secret_id"] or "").strip()
-    agent_id   = (customer["elevenlabs_agent_id"] or "").strip() or ELEVENLABS_AGENT_ID
+    did_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or DID_AGENT_ID
 
-    if not avatar_id or not secret_id or not agent_id:
-        return jsonify({"error": "Avatar not fully configured. Set avatar_id, elevenlabs_secret_id and elevenlabs_agent_id in admin panel."}), 500
-
-    lk, err = liveavatar_session_token(avatar_id, secret_id, agent_id)
+    did, err = did_create_session(did_agent_id)
     if err:
         return jsonify({"error": err}), 500
 
     return jsonify({
-        "session_token": lk.get("session_token"),
-        "livekit_url": lk.get("livekit_url"),
-        "livekit_client_token": lk.get("livekit_client_token"),
+        "did_session_id": did.get("session_id"),
+        "did_agent_id": did.get("agent_id"),
+        "did_chat_token": did.get("chat_token"),
         "session_id": session_id,
         "customer_id": customer["id"],
         "customer_name": customer["name"],
@@ -421,11 +401,10 @@ def customer_session():
     secret_id = (customer["elevenlabs_secret_id"] or "").strip()
     agent_id  = (customer["elevenlabs_agent_id"] or "").strip() or ELEVENLABS_AGENT_ID
 
-    lk = None
-    if avatar_id and secret_id and agent_id:
-        lk, err = liveavatar_session_token(avatar_id, secret_id, agent_id)
-        if err:
-            return jsonify({"error": err}), 500
+    did_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or DID_AGENT_ID
+    did, err = did_create_session(did_agent_id)
+    if err:
+        return jsonify({"error": err}), 500
 
     with db.cursor() as cur:
         cur.execute("SELECT COUNT(*) as cnt FROM ava_knowledge_base WHERE customer_id=%s", (customer["id"],))
@@ -437,9 +416,9 @@ def customer_session():
         except: pass
 
     return jsonify({
-        "session_token": lk.get("session_token") if lk else None,
-        "livekit_url": lk.get("livekit_url") if lk else None,
-        "livekit_client_token": lk.get("livekit_client_token") if lk else None,
+        "did_session_id": did.get("session_id"),
+        "did_agent_id": did.get("agent_id"),
+        "did_chat_token": did.get("chat_token"),
         "session_id": session_id,
         "customer_id": customer["id"],
         "knowledge_count": knowledge_count,
@@ -641,38 +620,12 @@ def admin_customer_ego(cid):
         except: pass
     return jsonify({"name": c["name"], "persona": c["persona_summary"], "ego": ego})
 
-@app.route("/admin/register_elevenlabs_secret", methods=["GET", "POST"])
-def register_elevenlabs_secret():
-    if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
-    data = request.get_json(silent=True) or {}
-    el_api_key = data.get("elevenlabs_api_key")
-    if not el_api_key: return jsonify({"error": "Missing elevenlabs_api_key"}), 400
-    r = requests.post(
-        "https://api.liveavatar.com/v1/secrets",
-        headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
-        json={"secret_type": "ELEVENLABS_API_KEY", "secret_value": el_api_key, "secret_name": data.get("name", "ElevenLabs Key")}
-    )
-    if r.status_code not in [200, 201]: return jsonify({"error": r.text}), 500
-    return jsonify(r.json())
+
 
 # ── Avatar thumbnail ──────────────────────────────────────────────────────────
 
 @app.route("/avatar/thumbnail")
 def avatar_thumbnail():
-    db = get_db()
-    customer = get_first_customer(db)
-    avatar_id = ((customer["avatar_id"] or "").strip() if customer else "") or LIVEAVATAR_AVATAR_ID
-    if avatar_id:
-        try:
-            r = requests.get(f"https://api.liveavatar.com/v2/avatars/{avatar_id}",
-                             headers={"X-API-KEY": LIVEAVATAR_API_KEY})
-            if r.status_code == 200:
-                d = r.json().get("data", {})
-                thumb = d.get("thumbnail_url") or d.get("preview_url")
-                if thumb:
-                    img = requests.get(thumb)
-                    return Response(img.content, mimetype=img.headers.get("Content-Type", "image/jpeg"))
-        except: pass
     local = os.path.join(os.path.dirname(__file__), "static", "petar.jpg")
     if os.path.exists(local): return send_file(local, mimetype="image/jpeg")
     return jsonify({"error": "No image"}), 404
