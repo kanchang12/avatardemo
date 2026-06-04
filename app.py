@@ -123,17 +123,27 @@ def did_create_session(agent_id=None):
     aid = agent_id or DID_AGENT_ID
     if not aid:
         return None, "Missing DID_AGENT_ID"
-    import base64
-    # DID_API_KEY is already in user:password format
+    
+    # Ensure the header includes the 'Basic' prefix and a space
+    # The API expects: Authorization: Basic <base64_encoded_key>
     auth = base64.b64encode(DID_API_KEY.encode()).decode()
+    headers = {
+        "Authorization": f"Basic {auth}", 
+        "Content-Type": "application/json", 
+        "accept": "application/json"
+    }
+    
     r = requests.post(
         f"https://api.d-id.com/agents/{aid}/sessions",
-        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json", "accept": "application/json"},
+        headers=headers,
         json={}
     )
+    
     print(f"D-ID session create: {r.status_code} {r.text[:300]}")
+    
     if r.status_code not in [200, 201]:
         return None, r.text
+        
     data = r.json()
     return {
         "session_id": data.get("id"),
