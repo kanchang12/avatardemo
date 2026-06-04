@@ -161,71 +161,108 @@ async function toggleConversation() {
 }
 
 async function startConversation() {
-  setStatus('Connecting...', '#f59e0b');
-  setTranscript('Requesting microphone access...');
+  setStatus('Connecting voice...', '#f59e0b');
   document.getElementById('voiceBtn').disabled = true;
 
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const wsUrl = signedUrl || `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${elAgentId}`;
+    const ws = new WebSocket(wsUrl);
+    conversation = ws;
 
-    const { Conversation } = await import('https://cdn.jsdelivr.net/npm/@11labs/client@latest/dist/index.js');
+    // Audio context for playback
+    const audioCtx = new AudioContext({ sampleRate: 16000 });
+    const audioQueue = [];
+    let isPlaying = false;
 
-    conversation = await Conversation.startSession({
-      signedUrl: signedUrl || undefined,
-      agentId: signedUrl ? undefined : elAgentId,
+    async function playNext() {
+      if (isPlaying || audioQueue.length === 0) return;
+      isPlaying = true;
+      const pcm = audioQueue.shift();
+      const buf = audioCtx.createBuffer(1, pcm.length, 16000);
+      buf.copyToChannel(pcm, 0);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.onended = () => { isPlaying = false; playNext();
+        document.getElementById('avatarRing').classList.remove('speaking'); };
+      src.start();
+      document.getElementById('avatarRing').classList.add('speaking');
+    }
 
-      onConnect: () => {
-        isConnected = true;
-        document.getElementById('voiceBtn').disabled = false;
-        document.getElementById('voiceBtn').classList.add('active');
-        document.getElementById('voiceBtnIcon').textContent = '⏹';
-        document.getElementById('voiceBtnText').textContent = 'End Conversation';
-        setStatus('Live', '#4ade80');
-        setTranscript('Connected — speak now.');
-      },
+    // Mic capture → send PCM to WS
+    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    const processor = { stream, mediaRecorder };
+    conversation._processor = processor;
 
-      onDisconnect: () => {
-        isConnected = false;
-        conversation = null;
-        document.getElementById('voiceBtn').disabled = false;
-        document.getElementById('voiceBtn').classList.remove('active');
-        document.getElementById('avatarRing').classList.remove('speaking');
-        document.getElementById('voiceBtnIcon').textContent = '🎙';
-        document.getElementById('voiceBtnText').textContent = 'Start Conversation';
-        setStatus('Ready', '#4ade80');
-        setTranscript('Conversation ended. Click to start again.');
-        setTimeout(() => loadKnowledge(), 3000);
-      },
+    ws.onopen = () => {
+      isConnected = true;
+      document.getElementById('voiceBtn').disabled = false;
+      document.getElementById('voiceBtn').classList.add('active');
+      document.getElementById('voiceBtnIcon').textContent = '⏹';
+      document.getElementById('voiceBtnText').textContent = 'End Conversation';
+      setStatus('Live', '#4ade80');
+      // Send init message
+      ws.send(JSON.stringify({ type: 'conversation_initiation_client_data' }));
+      // Start mic
+      mediaRecorder.ondataavailable = async (e) => {
+        if (ws.readyState !== 1 || !e.data.size) return;
+        const ab = await e.data.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
+        ws.send(JSON.stringify({ user_audio_chunk: b64 }));
+      };
+      mediaRecorder.start(250);
+    };
 
-      onMessage: (msg) => {
-        const isAgent = msg.type === 'agent_response';
-        const isUser  = msg.type === 'user_transcript';
-        if (isAgent || isUser) {
-          const speaker = isAgent ? 'Avatar' : 'You';
-          const text    = msg.message || msg.text || '';
-          if (text) {
-            setTranscript(`${speaker}: ${text}`);
-            saveMessage(isAgent ? 'avatar' : 'user', text);
-            if (isUser) trainText(text);
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'audio' && msg.audio_event?.audio_base_64) {
+          const raw = atob(msg.audio_event.audio_base_64);
+          const pcm = new Float32Array(raw.length / 2);
+          for (let i = 0; i < pcm.length; i++) {
+            const lo = raw.charCodeAt(i * 2);
+            const hi = raw.charCodeAt(i * 2 + 1);
+            const s = (hi << 8) | lo;
+            pcm[i] = s >= 32768 ? (s - 65536) / 32768 : s / 32768;
           }
+          audioQueue.push(pcm);
+          playNext();
         }
-      },
-
-      onModeChange: (mode) => {
-        if (mode.mode === 'speaking') {
-          document.getElementById('avatarRing').classList.add('speaking');
-        } else {
-          document.getElementById('avatarRing').classList.remove('speaking');
+        if (msg.type === 'agent_response' && msg.agent_response_event?.agent_response) {
+          const text = msg.agent_response_event.agent_response;
+          setTranscript('Avatar: ' + text);
+          saveMessage('avatar', text);
         }
-      },
+        if (msg.type === 'user_transcript' && msg.user_transcription_event?.user_transcript) {
+          const text = msg.user_transcription_event.user_transcript;
+          setTranscript('You: ' + text);
+          saveMessage('user', text);
+          trainText(text);
+        }
+      } catch(e) {}
+    };
 
-      onError: (err) => {
-        console.error('ElevenLabs error:', err);
-        setStatus('Error', '#ef4444');
-        setTranscript('Error: ' + (err.message || String(err)));
-        document.getElementById('voiceBtn').disabled = false;
-      }
-    });
+    ws.onclose = () => {
+      isConnected = false;
+      conversation = null;
+      stream.getTracks().forEach(t => t.stop());
+      document.getElementById('voiceBtn').disabled = false;
+      document.getElementById('voiceBtn').classList.remove('active');
+      document.getElementById('avatarRing').classList.remove('speaking');
+      document.getElementById('voiceBtnIcon').textContent = '🎙';
+      document.getElementById('voiceBtnText').textContent = 'Start Conversation';
+      setStatus('Ready', '#4ade80');
+      setTranscript('Conversation ended. Click to start again.');
+      setTimeout(() => loadKnowledge(), 3000);
+    };
+
+    ws.onerror = (err) => {
+      console.error('WS error:', err);
+      setStatus('Error', '#ef4444');
+      setTranscript('Connection error.');
+      document.getElementById('voiceBtn').disabled = false;
+    };
 
   } catch (e) {
     setStatus('Error', '#ef4444');
@@ -234,14 +271,16 @@ async function startConversation() {
     console.error(e);
   }
 }
-
 async function stopConversation() {
   if (conversation) {
-    await conversation.endSession();
+    if (conversation._processor) {
+      conversation._processor.mediaRecorder.stop();
+      conversation._processor.stream.getTracks().forEach(t => t.stop());
+    }
+    conversation.close();
+    conversation = null;
   }
-}
-
-async function saveMessage(speaker, text) {
+}age(speaker, text) {
   try {
     await fetch('/u/message', {
       method: 'POST',
