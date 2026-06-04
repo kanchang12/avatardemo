@@ -126,10 +126,10 @@ def get_first_customer(db):
 def elevenlabs_signed_url(agent_id):
     if not ELEVENLABS_API_KEY:
         return None, "Missing ELEVENLABS_API_KEY"
-    r = requests.post(
-        "https://api.elevenlabs.io/v1/convai/conversations/get_signed_url",
-        headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
-        json={"agent_id": agent_id},
+    r = requests.get(
+        "https://api.elevenlabs.io/v1/convai/conversation/get_signed_url",
+        headers={"xi-api-key": ELEVENLABS_API_KEY},
+        params={"agent_id": agent_id},
         timeout=15
     )
     if r.status_code != 200:
