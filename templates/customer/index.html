@@ -6,7 +6,11 @@
 <title>My Avatar — TRIONE</title>
 <script type="module">
 import { LiveAvatarSession } from "https://esm.sh/@heygen/liveavatar-web-sdk@0.0.18";
+import { Room, RoomEvent, Track } from "https://esm.sh/livekit-client@2";
 window.LiveAvatarSession = LiveAvatarSession;
+window.LiveKitRoom = Room;
+window.LiveKitRoomEvent = RoomEvent;
+window.LiveKitTrack = Track;
 </script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -95,6 +99,24 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 <script>
 let sessionId=null, customerId=null, liveAvatarSession=null;
 
+async function connectLiveKit(url, token) {
+  const Room = window.LiveKitRoom;
+  const RoomEvent = window.LiveKitRoomEvent;
+  const Track = window.LiveKitTrack;
+  if(!Room) { console.error('LiveKit not loaded'); return; }
+  const room = new Room();
+  room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    if(track.kind === Track.Kind.Video) {
+      const el = track.attach();
+      el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+      const c = document.getElementById('avatarContainer');
+      c.innerHTML = '';
+      c.appendChild(el);
+    }
+  });
+  await room.connect(url, token);
+}
+
 async function init() {
   setStatus('Getting session...','#f59e0b');
   const r=await fetch('/customer/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
@@ -122,12 +144,10 @@ async function init() {
     document.getElementById('lmsg').style.display='none';
   });
 
-  liveAvatarSession.on('stream.video', (stream) => {
-    const c = document.getElementById('avatarContainer');
-    let v = c.querySelector('video');
-    if(!v){v=document.createElement('video');v.autoplay=true;v.playsInline=true;v.style.cssText='width:100%;height:100%;object-fit:cover;';c.appendChild(v);}
-    v.srcObject=stream;
-  });
+  // Connect to LiveKit for video using credentials from backend
+  if(d.livekit_url && d.livekit_client_token) {
+    connectLiveKit(d.livekit_url, d.livekit_client_token);
+  }
 
   liveAvatarSession.on('avatar.speak_started', () => setStatus('Avatar speaking...','#f59e0b'));
   liveAvatarSession.on('avatar.speak_ended', () => setStatus('Listening — everything you say teaches your avatar','#4ade80'));
