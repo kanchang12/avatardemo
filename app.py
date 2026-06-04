@@ -121,7 +121,7 @@ def get_first_customer(db):
 
 def liveavatar_session_token(avatar_id, elevenlabs_secret_id, elevenlabs_agent_id):
     r = requests.post(
-        "https://api.liveavatar.com/v1/ava_sessions/token",
+        "https://api.liveavatar.com/v1/sessions/token",
         headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
         json={
             "avatar_id": avatar_id,
@@ -498,7 +498,7 @@ def delete_knowledge(kid):
     db.commit()
     return jsonify({"ok": True})
 
-@app.route("/customer/ava_sessions", methods=["GET", "POST"])
+@app.route("/customer/sessions", methods=["GET", "POST"])
 def customer_sessions():
     if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
     db = get_db()
@@ -550,7 +550,7 @@ def admin_home():
     if "admin_id" not in session: return redirect(url_for("admin_login"))
     return render_template("admin/index.html")
 
-@app.route("/admin/ava_customers", methods=["GET", "POST"])
+@app.route("/admin/customers", methods=["GET", "POST"])
 def admin_customers():
     if "admin_id" not in session: return jsonify({"error": "Not logged in"}), 401
     if request.method == "POST":
@@ -571,8 +571,8 @@ def admin_customers():
     db = get_db()
     with db.cursor() as cur:
         cur.execute("SELECT id, name, email, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, active, created_at FROM ava_customers ORDER BY created_at DESC")
-        ava_customers = cur.fetchall()
-    return jsonify([dict(c) for c in ava_customers])
+        rows = cur.fetchall()
+    return jsonify([dict(c) for c in rows])
 
 @app.route("/admin/customer/<cid>/update", methods=["GET", "POST"])
 def admin_update_customer(cid):
