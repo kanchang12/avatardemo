@@ -4,10 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>My Avatar — TRIONE</title>
-<script type="module">
-import * as LiveKitSDK from "https://esm.sh/livekit-client@2";
-window.LiveKitSDK = LiveKitSDK;
-</script>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;flex-direction:column}
@@ -96,7 +93,7 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 let sessionId=null, customerId=null, livekitRoom=null;
 
 async function connectLiveKit(url, token) {
-  const { Room, RoomEvent, Track } = window.LiveKitSDK;
+  const { Room, RoomEvent, Track } = window.LivekitClient;
   livekitRoom = new Room({ adaptiveStream: true, dynacast: true });
   livekitRoom.on(RoomEvent.TrackSubscribed, (track) => {
     if(track.kind === Track.Kind.Video) {
