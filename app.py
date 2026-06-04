@@ -20,6 +20,7 @@ ELEVENLABS_API_KEY   = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID  = os.getenv("ELEVENLABS_AGENT_ID")
 DID_API_KEY          = os.getenv("DID_API_KEY")
 DID_AGENT_ID         = os.getenv("DID_AGENT_ID")
+LIVEAVATAR_API_KEY   = os.getenv("LIVEAVATAR_API_KEY", "")
 LIVEAVATAR_AVATAR_ID = os.getenv("LIVEAVATAR_AVATAR_ID", "")
 
 # ── DB ────────────────────────────────────────────────────────────────────────
@@ -123,18 +124,32 @@ def get_first_customer(db):
 
 # ── ElevenLabs signed URL (voice) ─────────────────────────────────────────────
 
-def elevenlabs_signed_url(agent_id):
-    if not ELEVENLABS_API_KEY:
-        return None, "Missing ELEVENLABS_API_KEY"
-    r = requests.get(
-        "https://api.elevenlabs.io/v1/convai/conversation/get_signed_url",
-        headers={"xi-api-key": ELEVENLABS_API_KEY},
-        params={"agent_id": agent_id},
+def liveavatar_create_session(avatar_id=None, elevenlabs_secret_id=None, agent_id=None):
+    if not LIVEAVATAR_API_KEY:
+        return None, "Missing LIVEAVATAR_API_KEY"
+    aid = avatar_id or LIVEAVATAR_AVATAR_ID
+    if not aid:
+        return None, "Missing LIVEAVATAR_AVATAR_ID"
+    el_agent = agent_id or ELEVENLABS_AGENT_ID
+    el_secret = elevenlabs_secret_id or ""
+
+    payload = {
+        "mode": "LITE",
+        "avatar_id": aid,
+        "elevenlabs_agent_config": {
+            "secret_id": el_secret,
+            "agent_id": el_agent
+        }
+    }
+    r = requests.post(
+        "https://api.liveavatar.com/v1/sessions",
+        headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
+        json=payload,
         timeout=15
     )
-    if r.status_code != 200:
-        return None, f"ElevenLabs error {r.status_code}: {r.text}"
-    return r.json().get("signed_url"), None
+    if r.status_code not in (200, 201):
+        return None, f"LiveAvatar error {r.status_code}: {r.text}"
+    return r.json(), None
 
 # ── Gemini ────────────────────────────────────────────────────────────────────
 
@@ -341,14 +356,15 @@ def user_session():
     db.commit()
 
     el_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or ELEVENLABS_AGENT_ID
-    signed_url, err = elevenlabs_signed_url(el_agent_id)
+    el_secret_id = (customer.get("elevenlabs_secret_id") or "").strip()
+    avatar_id = (customer.get("avatar_id") or "").strip() or LIVEAVATAR_AVATAR_ID
+
+    la_session, err = liveavatar_create_session(avatar_id, el_secret_id, el_agent_id)
     if err:
         return jsonify({"error": err}), 500
 
     return jsonify({
-        "signed_url": signed_url,
-        "elevenlabs_agent_id": el_agent_id,
-        "did_agent_id": DID_AGENT_ID,
+        "la_session": la_session,
         "session_id": session_id,
         "customer_id": customer["id"],
         "customer_name": customer["name"],
@@ -419,7 +435,10 @@ def customer_session():
     db.commit()
 
     el_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or ELEVENLABS_AGENT_ID
-    signed_url, err = elevenlabs_signed_url(el_agent_id)
+    el_secret_id = (customer.get("elevenlabs_secret_id") or "").strip()
+    avatar_id = (customer.get("avatar_id") or "").strip() or LIVEAVATAR_AVATAR_ID
+
+    la_session, err = liveavatar_create_session(avatar_id, el_secret_id, el_agent_id)
     if err:
         return jsonify({"error": err}), 500
 
@@ -436,9 +455,7 @@ def customer_session():
         except: pass
 
     return jsonify({
-        "signed_url": signed_url,
-        "elevenlabs_agent_id": el_agent_id,
-        "did_agent_id": DID_AGENT_ID,
+        "la_session": la_session,
         "session_id": session_id,
         "customer_id": customer["id"],
         "knowledge_count": knowledge_count,
