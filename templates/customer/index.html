@@ -13,13 +13,20 @@ nav h1{color:#a78bfa;font-size:1.05rem;letter-spacing:2px;flex:1}
 nav a{color:#888;font-size:0.8rem;text-decoration:none;padding:5px 14px;border:1px solid #2e2e4e;border-radius:14px}
 nav a:hover{border-color:#a78bfa;color:#a78bfa}
 .layout{display:flex;flex:1;overflow:hidden;height:calc(100vh - 50px)}
-.vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center}
-#avatarContainer{width:100%;height:100%}
-.lmsg{position:absolute;color:#555;font-size:0.9rem}
+.vpanel{flex:1;background:#0f0f1a;position:relative}
+#avatarVideo{width:100%;height:100%;object-fit:cover;display:block}
+.lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555;font-size:0.9rem;text-align:center;width:100%}
 .side{width:400px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
 .status-section{padding:12px 16px;border-bottom:1px solid #1e1e2e;flex-shrink:0;display:flex;align-items:center;gap:8px}
 .sdot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0}
 .stext{font-size:0.8rem;color:#888;flex:1}
+.controls{padding:10px 14px;border-bottom:1px solid #1e1e2e;display:flex;gap:8px;flex-shrink:0}
+.ctrl-btn{flex:1;padding:9px;border:none;border-radius:9px;cursor:pointer;font-size:0.82rem;font-weight:600}
+.ctrl-btn.start{background:#a78bfa;color:#fff}
+.ctrl-btn.start:hover{background:#9061f9}
+.ctrl-btn.end{background:#ef4444;color:#fff}
+.ctrl-btn.end:hover{background:#dc2626}
+.ctrl-btn:disabled{background:#1e1e2e;color:#555;cursor:not-allowed}
 .tabs{display:flex;border-bottom:1px solid #1e1e2e;flex-shrink:0}
 .tab{flex:1;padding:11px;text-align:center;cursor:pointer;color:#888;font-size:0.78rem;border-bottom:2px solid transparent}
 .tab.active{color:#a78bfa;border-bottom-color:#a78bfa}
@@ -36,8 +43,6 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 .ego-section ul{list-style:none;display:flex;flex-direction:column;gap:4px}
 .ego-section ul li{font-size:0.8rem;color:#ccc;line-height:1.4;padding-left:12px;position:relative}
 .ego-section ul li:before{content:"•";position:absolute;left:0;color:#f59e0b}
-.ego-rel{font-size:0.78rem;color:#ccc;margin-bottom:4px}
-.ego-rel strong{color:#a78bfa}
 .persona-box{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:11px;padding:13px;font-size:0.83rem;color:#ccc;line-height:1.6;margin-bottom:8px}
 .stat-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .stat-chip{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:8px;padding:8px 12px;text-align:center;flex:1;min-width:60px}
@@ -62,16 +67,19 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
   <div class="pill" id="kCount">Loading...</div>
   <a href="/customer/logout">Sign out</a>
 </nav>
-
 <div class="layout">
   <div class="vpanel">
-    <p class="lmsg" id="lmsg">Connecting...</p>
-    <div id="avatarContainer"><video id="avatarVideo" autoplay playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video></div>
+    <div class="lmsg" id="lmsg">Connecting...</div>
+    <video id="avatarVideo" autoplay playsinline></video>
   </div>
   <div class="side">
     <div class="status-section">
       <div class="sdot" id="sDot"></div>
       <span class="stext" id="sText">Connecting...</span>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn start" id="startBtn" onclick="startConversation()" disabled>🎙 Start</button>
+      <button class="ctrl-btn end"   id="endBtn"   onclick="endConversation()"   disabled>⏹ End</button>
     </div>
     <div class="tabs">
       <div class="tab active" onclick="switchTab('ego',this)">EGO</div>
@@ -89,124 +97,149 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 </div>
 <div class="toast" id="toast"></div>
 
-<script type="module">
-import { LiveAvatarSession } from 'https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/+esm';
-
-let sessionId = null, customerId = null, liveSession = null;
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<script>
+let sessionId=null, customerId=null, livekitRoom=null, livekitUrl=null, livekitToken=null;
 
 async function init() {
-  setStatus('Connecting...', '#f59e0b');
+  setStatus('Connecting...','#f59e0b');
   try {
-    const r = await fetch('/customer/session', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
-    const d = await r.json();
-    if (!r.ok || d.error) { setStatus('Error: ' + (d.error || 'Server error'), '#ef4444'); return; }
-
-    sessionId  = d.session_id;
-    customerId = d.customer_id;
-    document.getElementById('kCount').textContent = d.knowledge_count + ' chunks';
+    const r=await fetch('/customer/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+    const d=await r.json();
+    if(!r.ok||d.error){setStatus('Error: '+(d.error||'Server error'),'#ef4444');return;}
+    sessionId=d.session_id;
+    customerId=d.customer_id;
+    livekitUrl=d.la_session.livekit_url;
+    livekitToken=d.la_session.livekit_client_token;
+    document.getElementById('kCount').textContent=d.knowledge_count+' chunks';
     renderEgo(d.ego_model, d.persona);
     loadKnowledge();
     loadSessions();
+    setStatus('Ready','#4ade80');
+    document.getElementById('lmsg').textContent='Ready — click Start to talk';
+    document.getElementById('startBtn').disabled=false;
+  } catch(e){setStatus('Error: '+e.message,'#ef4444');console.error(e);}
+}
 
-    const la = d.la_session;
-    document.getElementById('lmsg').style.display = 'none';
+async function startConversation() {
+  document.getElementById('startBtn').disabled=true;
+  setStatus('Connecting...','#f59e0b');
+  try {
+    const { Room, RoomEvent, Track } = LivekitClient;
+    livekitRoom=new Room();
 
-    const token = la.session_token;
-    liveSession = new LiveAvatarSession(token, { voiceChat: true });
-
-    liveSession.on('connected', () => setStatus('Live', '#4ade80'));
-    liveSession.on('disconnected', () => setStatus('Disconnected', '#ef4444'));
-    liveSession.on('user_transcript', (data) => {
-      const text = data?.text || data?.user_transcript || '';
-      if (text) trainText(text);
+    livekitRoom.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>{
+      if(track.kind===Track.Kind.Video){
+        track.attach(document.getElementById('avatarVideo'));
+        document.getElementById('lmsg').style.display='none';
+        setStatus('Live','#4ade80');
+        document.getElementById('endBtn').disabled=false;
+      }
+      if(track.kind===Track.Kind.Audio) track.attach();
     });
 
-    const videoEl = document.getElementById('avatarVideo');
-    await liveSession.start(videoEl);
-    setStatus('Live', '#4ade80');
+    livekitRoom.on(RoomEvent.DataReceived,(data)=>{
+      try {
+        const msg=JSON.parse(new TextDecoder().decode(data));
+        if(msg.event_type==='user.transcription'&&msg.text) trainText(msg.text);
+      } catch(e){}
+    });
 
-  } catch(e) {
-    setStatus('Error: ' + e.message, '#ef4444');
+    livekitRoom.on(RoomEvent.Disconnected,()=>{
+      setStatus('Ended','#888');
+      document.getElementById('startBtn').disabled=false;
+      document.getElementById('endBtn').disabled=true;
+    });
+
+    await livekitRoom.connect(livekitUrl, livekitToken);
+    await livekitRoom.localParticipant.setMicrophoneEnabled(true);
+
+  } catch(e){
+    setStatus('Error','#ef4444');
+    document.getElementById('startBtn').disabled=false;
     console.error(e);
   }
 }
 
-async function trainText(text) {
-  if (!text.trim() || !sessionId) return;
-  try {
-    const r = await fetch('/customer/train', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({text, session_id: sessionId, context: 'voice conversation with own avatar'})});
-    const d = await r.json();
-    if (d.chunks_added > 0 || d.beliefs_extracted > 0)
-      showToast(`EGO updated: +${d.chunks_added} chunks, +${d.beliefs_extracted} beliefs`);
-  } catch(e) {}
+async function endConversation() {
+  if(livekitRoom){await livekitRoom.disconnect();livekitRoom=null;}
+  document.getElementById('endBtn').disabled=true;
+  document.getElementById('startBtn').disabled=false;
+  setStatus('Ended','#888');
 }
 
-window.trainManual = async function() {
-  const text = document.getElementById('trainText').value.trim();
-  if (!text) return;
-  document.getElementById('trainText').value = '';
+async function trainText(text) {
+  if(!text.trim()||!sessionId) return;
+  try {
+    const r=await fetch('/customer/train',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text,session_id:sessionId,context:'voice conversation with own avatar'})});
+    const d=await r.json();
+    if(d.chunks_added>0||d.beliefs_extracted>0)
+      showToast(`EGO updated: +${d.chunks_added} chunks, +${d.beliefs_extracted} beliefs`);
+  } catch(e){}
+}
+
+async function trainManual() {
+  const text=document.getElementById('trainText').value.trim();
+  if(!text) return;
+  document.getElementById('trainText').value='';
   await trainText(text);
   await loadKnowledge();
 }
 
 async function loadKnowledge() {
-  const r = await fetch('/customer/knowledge');
-  const chunks = await r.json();
-  document.getElementById('kCount').textContent = chunks.length + ' chunks';
-  const el = document.getElementById('tab-knowledge');
-  if (!chunks.length) { el.innerHTML = '<p class="empty">Talk to your avatar — everything you share builds your knowledge base.</p>'; return; }
-  el.innerHTML = chunks.map(c =>
-    `<div class="chunk"><div class="cat ${c.ego_layer==='ego'?'ego':'raw'}">${c.ego_layer==='ego'?'⚡ EGO':'📝 RAW'} · ${c.category}</div><div class="text">${c.chunk}</div><button class="del" onclick="delChunk(${c.id},this)">✕</button></div>`
-  ).join('');
+  const r=await fetch('/customer/knowledge');
+  const chunks=await r.json();
+  document.getElementById('kCount').textContent=chunks.length+' chunks';
+  const el=document.getElementById('tab-knowledge');
+  if(!chunks.length){el.innerHTML='<p class="empty">Talk to your avatar — everything you share builds your knowledge base.</p>';return;}
+  el.innerHTML=chunks.map(c=>`<div class="chunk"><div class="cat ${c.ego_layer==='ego'?'ego':'raw'}">${c.ego_layer==='ego'?'⚡ EGO':'📝 RAW'} · ${c.category}</div><div class="text">${c.chunk}</div><button class="del" onclick="delChunk(${c.id},this)">✕</button></div>`).join('');
 }
 
 async function loadEgo() {
-  const r = await fetch('/customer/ego');
-  const d = await r.json();
-  renderEgo(d.ego, d.summary);
+  const r=await fetch('/customer/ego');
+  const d=await r.json();
+  renderEgo(d.ego,d.summary);
 }
 
-function renderEgo(ego, persona) {
-  const el = document.getElementById('tab-ego');
-  if (!ego && !persona) { el.innerHTML = '<p class="empty">Your EGO model will be built here as you talk to your avatar.<br><br>Every conversation teaches it who you are.</p>'; return; }
-  let html = '';
-  if (persona) html += `<div class="persona-box">${persona}</div>`;
-  const bCount=(ego?.beliefs||[]).length, vCount=(ego?.values||[]).length;
-  const rCount=Object.keys(ego?.relationships||{}).length, pCount=(ego?.reasoning_patterns||[]).length;
-  html += `<div class="stat-row"><div class="stat-chip"><div class="n">${bCount}</div><div class="l">Beliefs</div></div><div class="stat-chip"><div class="n">${vCount}</div><div class="l">Values</div></div><div class="stat-chip"><div class="n">${rCount}</div><div class="l">Relations</div></div><div class="stat-chip"><div class="n">${pCount}</div><div class="l">Patterns</div></div></div>`;
-  if (ego?.beliefs?.length) html += `<div class="ego-section"><h4>Core Beliefs</h4><ul>${ego.beliefs.slice(0,8).map(b=>`<li>${b}</li>`).join('')}</ul></div>`;
-  if (ego?.values?.length) html += `<div class="ego-section"><h4>Values</h4><ul>${ego.values.slice(0,6).map(v=>`<li>${v}</li>`).join('')}</ul></div>`;
-  if (ego?.reasoning_patterns?.length) html += `<div class="ego-section"><h4>How They Think</h4><ul>${ego.reasoning_patterns.slice(0,5).map(p=>`<li>${p}</li>`).join('')}</ul></div>`;
-  if (ego?.relationships&&Object.keys(ego.relationships).length) html += `<div class="ego-section"><h4>Relationships</h4>${Object.entries(ego.relationships).slice(0,8).map(([p,d])=>`<div class="ego-rel"><strong>${p}:</strong> ${d}</div>`).join('')}</div>`;
-  if (ego?.contradictions?.length) html += `<div class="ego-section"><h4>Growth & Contradictions</h4><ul>${ego.contradictions.slice(0,4).map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
-  el.innerHTML = html;
+function renderEgo(ego,persona) {
+  const el=document.getElementById('tab-ego');
+  if(!ego&&!persona){el.innerHTML='<p class="empty">Your EGO model will be built here as you talk to your avatar.<br><br>Every conversation teaches it who you are.</p>';return;}
+  let html='';
+  if(persona) html+=`<div class="persona-box">${persona}</div>`;
+  const bCount=(ego?.beliefs||[]).length,vCount=(ego?.values||[]).length;
+  const rCount=Object.keys(ego?.relationships||{}).length,pCount=(ego?.reasoning_patterns||[]).length;
+  html+=`<div class="stat-row"><div class="stat-chip"><div class="n">${bCount}</div><div class="l">Beliefs</div></div><div class="stat-chip"><div class="n">${vCount}</div><div class="l">Values</div></div><div class="stat-chip"><div class="n">${rCount}</div><div class="l">Relations</div></div><div class="stat-chip"><div class="n">${pCount}</div><div class="l">Patterns</div></div></div>`;
+  if(ego?.beliefs?.length) html+=`<div class="ego-section"><h4>Core Beliefs</h4><ul>${ego.beliefs.slice(0,8).map(b=>`<li>${b}</li>`).join('')}</ul></div>`;
+  if(ego?.values?.length) html+=`<div class="ego-section"><h4>Values</h4><ul>${ego.values.slice(0,6).map(v=>`<li>${v}</li>`).join('')}</ul></div>`;
+  if(ego?.reasoning_patterns?.length) html+=`<div class="ego-section"><h4>How They Think</h4><ul>${ego.reasoning_patterns.slice(0,5).map(p=>`<li>${p}</li>`).join('')}</ul></div>`;
+  if(ego?.relationships&&Object.keys(ego.relationships).length) html+=`<div class="ego-section"><h4>Relationships</h4>${Object.entries(ego.relationships).slice(0,8).map(([p,d])=>`<div style="font-size:0.78rem;color:#ccc;margin-bottom:4px"><strong style="color:#a78bfa">${p}:</strong> ${d}</div>`).join('')}</div>`;
+  if(ego?.contradictions?.length) html+=`<div class="ego-section"><h4>Growth & Contradictions</h4><ul>${ego.contradictions.slice(0,4).map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
+  el.innerHTML=html;
 }
 
 async function loadSessions() {
-  const r = await fetch('/customer/sessions');
-  const sessions = await r.json();
-  const el = document.getElementById('tab-sessions');
-  if (!sessions.length) { el.innerHTML = '<p class="empty">No sessions yet.</p>'; return; }
-  el.innerHTML = sessions.map(s =>
-    `<div class="sitem"><div><div class="stype">${s.session_type==='customer_training'?'🎓 Training':'💬 User chat'}</div><div class="sdate">${s.started_at?s.started_at.slice(0,16):''}</div></div><div class="scount">${s.message_count} msgs</div></div>`
-  ).join('');
+  const r=await fetch('/customer/sessions');
+  const sessions=await r.json();
+  const el=document.getElementById('tab-sessions');
+  if(!sessions.length){el.innerHTML='<p class="empty">No sessions yet.</p>';return;}
+  el.innerHTML=sessions.map(s=>`<div class="sitem"><div><div class="stype">${s.session_type==='customer_training'?'🎓 Training':'💬 User chat'}</div><div class="sdate">${s.started_at?s.started_at.slice(0,16):''}</div></div><div class="scount">${s.message_count} msgs</div></div>`).join('');
 }
 
-window.delChunk = async function(id, btn) { await fetch(`/customer/knowledge/${id}`,{method:'DELETE'}); btn.closest('.chunk').remove(); }
+async function delChunk(id,btn){await fetch(`/customer/knowledge/${id}`,{method:'DELETE'});btn.closest('.chunk').remove();}
 
-window.switchTab = function(name, el) {
+function switchTab(name,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('tab-'+name).classList.add('active');
-  if (name==='ego') loadEgo();
+  if(name==='ego') loadEgo();
 }
 
-function setStatus(text, color) { document.getElementById('sText').textContent=text; document.getElementById('sDot').style.background=color; }
-function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3500); }
+function setStatus(text,color){document.getElementById('sText').textContent=text;document.getElementById('sDot').style.background=color;}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
 
-setInterval(()=>{ if(sessionId) loadKnowledge(); }, 30000);
+setInterval(()=>{if(sessionId) loadKnowledge();},30000);
 init();
 </script>
 </body>
