@@ -149,7 +149,7 @@ def hash_pw(pw): return hashlib.sha256(pw.encode()).hexdigest()
 def get_customer(db, cid): return db.execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
 def get_first_customer(db): return db.execute("SELECT * FROM customers WHERE active=1 LIMIT 1").fetchone()
 
-def liveavatar_session_token(avatar_id, elevenlabs_secret_id, elevenlabs_agent_id, sandbox=True):
+def liveavatar_session_token(avatar_id, elevenlabs_secret_id, elevenlabs_agent_id, sandbox=False):
     """
     Create a LITE mode session token using ElevenLabs Agent Connector.
     Backend creates the token, frontend uses it with the Web SDK.
@@ -160,7 +160,6 @@ def liveavatar_session_token(avatar_id, elevenlabs_secret_id, elevenlabs_agent_i
         json={
             "avatar_id": avatar_id,
             "mode": "LITE",
-            "is_sandbox": sandbox,
             "elevenlabs_agent_config": {
                 "secret_id": elevenlabs_secret_id,
                 "agent_id": elevenlabs_agent_id
