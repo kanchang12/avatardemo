@@ -94,23 +94,26 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 let sessionId=null, customerId=null, didAgent=null;
 
 async function init() {
-  setStatus('Connecting to Agent...', '#f59e0b');
-  const r = await fetch('/customer/session', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+  setStatus('Getting session...', '#f59e0b');
+  
+  const r = await fetch('/customer/session', {
+      method: 'POST', 
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+  });
+  
   const d = await r.json();
   
-  if(d.error) {
-    document.getElementById('lmsg').textContent = 'Error: ' + d.error;
-    setStatus('Error', '#ef4444');
-    return;
+  // STOP here if there is an error
+  if(r.status !== 200 || d.error) {
+    const errorMsg = d.error || 'Server Error';
+    console.error('Session failed:', errorMsg);
+    setStatus('Error: ' + errorMsg, '#ef4444');
+    return; // This prevents the TypeError below
   }
 
+  // Only proceed if everything is successful
   sessionId = d.session_id; 
-  customerId = d.customer_id;
-  
-  // No need to manually toggle display of 'avatarVideo' 
-  // as the D-ID script will handle the DOM injection into 'vpanel'
-  document.getElementById('lmsg').style.display = 'none';
-  
   document.getElementById('kCount').textContent = d.knowledge_count + ' chunks';
   renderEgo(d.ego_model, d.persona);
   loadKnowledge(); 
