@@ -123,10 +123,11 @@ def did_create_session(agent_id=None):
     if not aid:
         return None, "Missing DID_AGENT_ID"
     
-    # Use the Bearer token as required by D-ID V2
+    # Using Bearer token as required by D-ID V2
     headers = {
         "Authorization": f"Bearer {DID_API_KEY.strip()}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "accept": "application/json"
     }
     
     try:
@@ -135,14 +136,16 @@ def did_create_session(agent_id=None):
             headers=headers,
             json={}
         )
-        # Log the full response for debugging
-        print(f"D-ID API Response: {r.status_code} - {r.text}")
         
         if r.status_code != 200:
             return None, f"D-ID returned {r.status_code}: {r.text}"
             
         data = r.json()
-        return {"session_id": data.get("id"), "chat_token": data.get("chat_token")}, None
+        return {
+            "session_id": data.get("id"),
+            "chat_token": data.get("chat_token"),
+            "agent_id": aid
+        }, None
     except Exception as e:
         return None, str(e)
 
