@@ -69,7 +69,7 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 <div class="layout">
   <div class="vpanel" id="vpanel">
     <p class="loading" id="lmsg">Connecting to your avatar...</p>
-    <video id="avatarVideo" autoplay playsinline></video>
+    <div id="avatarContainer" style="width:100%;height:100%"></div>
   </div>
   <div class="side">
     <div class="status-section">
@@ -115,12 +115,12 @@ async function init() {
   const LiveAvatarSession = window.LiveAvatarSession;
   if(!LiveAvatarSession){document.getElementById('lmsg').textContent='SDK not loaded';return;}
 
-  liveAvatarSession = new LiveAvatarSession(d.session_token, {voiceChat: true});
+  liveAvatarSession = new LiveAvatarSession(d.session_token, {voiceChat: true, container: document.getElementById('avatarContainer')});
 
   liveAvatarSession.on('session.started', () => {
     setStatus('Connected — everything you say teaches your avatar','#4ade80');
     document.getElementById('lmsg').style.display='none';
-    document.getElementById('avatarVideo').style.display='block';
+    document.getElementById('avatarContainer').style.display='block';
   });
 
   liveAvatarSession.on('avatar.speak_started', () => setStatus('Avatar speaking...','#f59e0b'));
@@ -133,8 +133,8 @@ async function init() {
 
   liveAvatarSession.on('session.stopped', () => setStatus('Disconnected','#333'));
 
-  liveAvatarSession.attachVideoElement(document.getElementById('avatarVideo'));
   await liveAvatarSession.start();
+  // Video element is handled by the SDK via the session events
 }
 
 async function trainText(text) {
