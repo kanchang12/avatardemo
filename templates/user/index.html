@@ -35,7 +35,8 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .dot{width:8px;height:8px;border-radius:50%;background:#4ade80;animation:blink 1.2s infinite}
 .talk-body{display:flex;flex:1;overflow:hidden}
 .vpanel{flex:1;background:#0f0f1a;position:relative;display:flex;align-items:center;justify-content:center}
-.vpanel .lmsg{color:#555;font-size:0.9rem}
+#avatarContainer{width:100%;height:100%}
+.lmsg{color:#555;font-size:0.9rem;position:absolute}
 .side{width:340px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column}
 .ubar{padding:14px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:12px}
 .ucam{width:52px;height:52px;border-radius:50%;overflow:hidden;border:2px solid #2e2e4e;background:#1e1e2e;flex-shrink:0}
@@ -43,12 +44,6 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .uinfo h3{font-size:0.92rem}
 .uinfo p{font-size:0.78rem;color:#888;margin-top:2px}
 .status-bar{padding:12px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:8px;font-size:0.82rem;color:#888}
-.voice-controls{padding:14px 18px;border-bottom:1px solid #1e1e2e;display:flex;align-items:center;gap:10px}
-.voice-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#a78bfa;color:#fff;border:none;border-radius:10px;padding:11px;font-size:0.88rem;cursor:pointer;font-weight:600;transition:background 0.2s}
-.voice-btn:hover{background:#9061f9}
-.voice-btn:disabled{background:#2e2e4e;color:#555;cursor:not-allowed}
-.voice-btn.active{background:#ef4444}
-.voice-btn.active:hover{background:#dc2626}
 .chat-log{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
 .msg{font-size:0.88rem;line-height:1.6}
 .msg .who{font-weight:600;font-size:0.76rem;margin-bottom:3px}
@@ -60,7 +55,6 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 </head>
 <body>
 
-<!-- LANDING -->
 <div id="landing">
   <h1>TRIONE</h1>
   <p class="sub">A conversation worth having</p>
@@ -74,7 +68,6 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   </div>
 </div>
 
-<!-- CAMERA PROMPT -->
 <div id="cam-prompt">
   <div class="cam-box">
     <h2>Welcome</h2>
@@ -87,7 +80,6 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   </div>
 </div>
 
-<!-- TALK PAGE -->
 <div id="talk-page">
   <div class="talk-nav">
     <button onclick="goBack()">← Back</button>
@@ -95,9 +87,9 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
     <div class="live"><div class="dot"></div>Live</div>
   </div>
   <div class="talk-body">
-    <!-- D-ID avatar renders here via embed script -->
-    <div class="vpanel" id="vpanel">
+    <div class="vpanel">
       <p class="lmsg" id="lmsg">Connecting...</p>
+      <div id="avatarContainer"></div>
     </div>
     <div class="side">
       <div class="ubar">
@@ -111,13 +103,6 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
         <div class="dot" id="sDot" style="background:#333;animation:none"></div>
         <span id="sText">Connecting...</span>
       </div>
-      <!-- ElevenLabs voice button -->
-      <div class="voice-controls">
-        <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()" disabled>
-          <span id="voiceBtnIcon">🎙</span>
-          <span id="voiceBtnText">Start Voice</span>
-        </button>
-      </div>
       <div class="chat-log" id="chatLog">
         <div class="msg avatar"><div class="who">Petar</div><div class="text">Hello. Tell me what's on your mind.</div></div>
       </div>
@@ -125,19 +110,21 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
   </div>
 </div>
 
-<script>
-let camStream = null, userId = null, sessionId = null, customerId = null;
-let conversation = null, isVoiceConnected = false, signedUrl = null, elAgentId = null;
+<script type="module">
+import { createSession, SessionModeEnum, AgentEventsEnum } from 'https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/+esm';
 
-async function initTalk() {
+let camStream = null, userId = null, sessionId = null, customerId = null;
+let liveSession = null;
+
+window.initTalk = async function() {
   document.getElementById('cam-prompt').style.display = 'flex';
   try {
     camStream = await navigator.mediaDevices.getUserMedia({video: true, audio: false});
     document.getElementById('camPrev').srcObject = camStream;
-  } catch(e) { skipCamera(); }
+  } catch(e) { window.skipCamera(); }
 }
 
-async function captureAndContinue() {
+window.captureAndContinue = async function() {
   const v = document.getElementById('camPrev');
   const c = document.createElement('canvas');
   c.width = v.videoWidth; c.height = v.videoHeight;
@@ -156,7 +143,7 @@ async function captureAndContinue() {
   launchSession();
 }
 
-function skipCamera() {
+window.skipCamera = function() {
   if (camStream) camStream.getTracks().forEach(t => t.stop());
   document.getElementById('cam-prompt').style.display = 'none';
   launchSession();
@@ -165,12 +152,7 @@ function skipCamera() {
 async function launchSession() {
   document.getElementById('landing').style.display = 'none';
   document.getElementById('talk-page').style.display = 'flex';
-
-  // User's own camera in sidebar
-  try {
-    const s = await navigator.mediaDevices.getUserMedia({video: true});
-    document.getElementById('userCam').srcObject = s;
-  } catch(e) {}
+  try { const s = await navigator.mediaDevices.getUserMedia({video: true}); document.getElementById('userCam').srcObject = s; } catch(e) {}
 
   setStatus('Connecting...', '#f59e0b');
 
@@ -179,141 +161,48 @@ async function launchSession() {
     const d = await r.json();
     if (d.error) { document.getElementById('lmsg').textContent = 'Error: ' + d.error; setStatus('Error', '#ef4444'); return; }
 
-    sessionId  = d.session_id;
-    customerId = d.customer_id;
-    signedUrl  = d.signed_url;
-    elAgentId  = d.elevenlabs_agent_id;
+    sessionId   = d.session_id;
+    customerId  = d.customer_id;
 
-    document.getElementById('lmsg').textContent = 'Avatar ready — start voice to talk';
-    setStatus('Ready', '#4ade80');
-    document.getElementById('voiceBtn').disabled = false;
+    const la = d.la_session;
+    document.getElementById('lmsg').style.display = 'none';
+
+    liveSession = await createSession({
+      token: la.token || la.access_token || la.livekit_token,
+      serverUrl: la.server_url || la.livekit_url || la.url,
+      container: document.getElementById('avatarContainer'),
+      mode: SessionModeEnum.LITE,
+    });
+
+    liveSession.on(AgentEventsEnum.CONNECTED, () => setStatus('Connected', '#4ade80'));
+    liveSession.on(AgentEventsEnum.DISCONNECTED, () => setStatus('Disconnected', '#ef4444'));
+
+    liveSession.on(AgentEventsEnum.ELEVENLABS_AGENT_EVENT, (evt) => {
+      if (evt.elevenlabs_event_type === 'agent_response' && evt.data?.agent_response) {
+        addMsg('avatar', 'Petar', evt.data.agent_response);
+        saveMsg('avatar', evt.data.agent_response);
+      }
+      if (evt.elevenlabs_event_type === 'user_transcript' && evt.data?.user_transcript) {
+        addMsg('user', 'You', evt.data.user_transcript);
+        saveMsg('user', evt.data.user_transcript);
+      }
+    });
+
+    await liveSession.connect();
+    setStatus('Live', '#4ade80');
 
   } catch(e) {
-    document.getElementById('lmsg').textContent = 'Connection error';
+    document.getElementById('lmsg').textContent = 'Error: ' + e.message;
     setStatus('Error', '#ef4444');
-  }
-}
-
-async function toggleVoice() {
-  if (!isVoiceConnected) {
-    await startVoice();
-  } else {
-    await stopVoice();
-  }
-}
-
-async function startVoice() {
-  setStatus('Connecting voice...', '#f59e0b');
-  document.getElementById('voiceBtn').disabled = true;
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const wsUrl = signedUrl || `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${elAgentId}`;
-    const ws = new WebSocket(wsUrl);
-    conversation = ws;
-
-    const audioCtx = new AudioContext({ sampleRate: 16000 });
-    const audioQueue = [];
-    let isPlaying = false;
-
-    async function playNext() {
-      if (isPlaying || audioQueue.length === 0) return;
-      isPlaying = true;
-      const pcm = audioQueue.shift();
-      const buf = audioCtx.createBuffer(1, pcm.length, 16000);
-      buf.copyToChannel(pcm, 0);
-      const src = audioCtx.createBufferSource();
-      src.buffer = buf;
-      src.connect(audioCtx.destination);
-      src.onended = () => { isPlaying = false; playNext(); };
-      src.start();
-    }
-
-    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-    conversation._processor = { stream, mediaRecorder };
-
-    ws.onopen = () => {
-      isVoiceConnected = true;
-      document.getElementById('voiceBtn').disabled = false;
-      document.getElementById('voiceBtn').classList.add('active');
-      document.getElementById('voiceBtnIcon').textContent = '⏹';
-      document.getElementById('voiceBtnText').textContent = 'End Voice';
-      setStatus('Live', '#4ade80');
-      document.getElementById('lmsg').style.display = 'none';
-      ws.send(JSON.stringify({ type: 'conversation_initiation_client_data' }));
-      mediaRecorder.ondataavailable = async (e) => {
-        if (ws.readyState !== 1 || !e.data.size) return;
-        const ab = await e.data.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(ab)));
-        ws.send(JSON.stringify({ user_audio_chunk: b64 }));
-      };
-      mediaRecorder.start(250);
-    };
-
-    ws.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data);
-        if (msg.type === 'audio' && msg.audio_event?.audio_base_64) {
-          const raw = atob(msg.audio_event.audio_base_64);
-          const pcm = new Float32Array(raw.length / 2);
-          for (let i = 0; i < pcm.length; i++) {
-            const lo = raw.charCodeAt(i * 2);
-            const hi = raw.charCodeAt(i * 2 + 1);
-            const s = (hi << 8) | lo;
-            pcm[i] = s >= 32768 ? (s - 65536) / 32768 : s / 32768;
-          }
-          audioQueue.push(pcm);
-          playNext();
-        }
-        if (msg.type === 'agent_response' && msg.agent_response_event?.agent_response) {
-          const text = msg.agent_response_event.agent_response;
-          addMsg('avatar', 'Petar', text);
-          if (sessionId) fetch('/u/message', {method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({session_id:sessionId, customer_id:customerId, user_id:userId, speaker:'avatar', text})}).catch(()=>{});
-        }
-        if (msg.type === 'user_transcript' && msg.user_transcription_event?.user_transcript) {
-          const text = msg.user_transcription_event.user_transcript;
-          addMsg('user', 'You', text);
-          if (sessionId) fetch('/u/message', {method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({session_id:sessionId, customer_id:customerId, user_id:userId, speaker:'user', text})}).catch(()=>{});
-        }
-      } catch(e) {}
-    };
-
-    ws.onclose = () => {
-      isVoiceConnected = false;
-      conversation = null;
-      stream.getTracks().forEach(t => t.stop());
-      document.getElementById('voiceBtn').disabled = false;
-      document.getElementById('voiceBtn').classList.remove('active');
-      document.getElementById('voiceBtnIcon').textContent = '🎙';
-      document.getElementById('voiceBtnText').textContent = 'Start Voice';
-      setStatus('Ready', '#4ade80');
-      document.getElementById('lmsg').style.display = 'block';
-      document.getElementById('lmsg').textContent = 'Click Start Voice to talk';
-    };
-
-    ws.onerror = (err) => {
-      console.error('WS error:', err);
-      setStatus('Voice error', '#ef4444');
-      document.getElementById('voiceBtn').disabled = false;
-    };
-
-  } catch (e) {
-    setStatus('Could not start voice', '#ef4444');
-    document.getElementById('voiceBtn').disabled = false;
     console.error(e);
   }
 }
-async function stopVoice() {
-  if (conversation) {
-    if (conversation._processor) {
-      conversation._processor.mediaRecorder.stop();
-      conversation._processor.stream.getTracks().forEach(t => t.stop());
-    }
-    conversation.close();
-    conversation = null;
-  }
+
+async function saveMsg(speaker, text) {
+  try {
+    await fetch('/u/message', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_id: sessionId, customer_id: customerId, user_id: userId, speaker, text})});
+  } catch(e) {}
 }
 
 function setStatus(text, color) {
@@ -336,30 +225,14 @@ function renderHistory(history) {
   history.forEach(m => addMsg(m.speaker === 'user' ? 'user' : 'avatar', m.speaker === 'user' ? 'You' : 'Petar', m.text));
 }
 
-async function goBack() {
-  if (conversation) await conversation.endSession().catch(()=>{});
+window.goBack = async function() {
+  if (liveSession) { try { await liveSession.disconnect(); } catch(e) {} liveSession = null; }
   document.getElementById('talk-page').style.display = 'none';
   document.getElementById('landing').style.display = 'flex';
   document.getElementById('lmsg').style.display = 'block';
   document.getElementById('lmsg').textContent = 'Connecting...';
-  sessionId = null; customerId = null; signedUrl = null;
-  isVoiceConnected = false; conversation = null;
-  document.getElementById('voiceBtn').disabled = true;
-  document.getElementById('voiceBtn').classList.remove('active');
-  document.getElementById('voiceBtnIcon').textContent = '🎙';
-  document.getElementById('voiceBtnText').textContent = 'Start Voice';
+  sessionId = null; customerId = null;
 }
-</script>
-
-<!-- D-ID embed — targets #vpanel for avatar face/video -->
-<script type="module"
-      src="https://agent.d-id.com/v2/index.js"
-      data-mode="full"
-      data-client-key="ck_NjxqnDLksjtkEiwNvxNA3"
-      data-agent-id="v2_agt_qY7U703e"
-      data-name="did-agent"
-      data-monitor="true"
-      data-target-id="vpanel">
 </script>
 </body>
 </html>
