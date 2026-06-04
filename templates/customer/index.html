@@ -90,78 +90,7 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 <div class="toast" id="toast"></div>
 
 <script>
-let sessionId=null, customerId=null, livekitRoom=null;
-
-async function connectLiveKit(url, token) {
-  if(livekitRoom) { try { await livekitRoom.disconnect(); } catch(e) {} livekitRoom=null; }
-  const { Room, RoomEvent, Track } = window.LivekitClient;
-  const c = document.getElementById('avatarContainer');
-  if(c) c.innerHTML = '';
-  livekitRoom = new Room({
-    adaptiveStream: true,
-    dynacast: true,
-    videoCaptureDefaults: { resolution: { width: 1280, height: 720 } }
-  });
-  // Subscribe to all tracks from remote participants
-  function attachVideoTrack(track) {
-    if(track.kind !== Track.Kind.Video) return;
-    const el = track.attach();
-    el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
-    const container = document.getElementById('avatarContainer') || document.getElementById('vpanel');
-    if(container) { container.innerHTML=''; container.appendChild(el); }
-    document.getElementById('lmsg').style.display='none';
-  }
-
-  livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-    participant.trackPublications.forEach((pub) => {
-      if(pub.track) attachVideoTrack(pub.track);
-      else pub.setSubscribed(true);
-    });
-  });
-  livekitRoom.on(RoomEvent.TrackPublished, (pub, participant) => {
-    pub.setSubscribed(true);
-  });
-  livekitRoom.on(RoomEvent.TrackSubscribed, (track) => {
-    if(track.kind === Track.Kind.Video) {
-      attachVideoTrack(track);
-      setStatus('Connected — everything you say teaches your avatar','#4ade80');
-    }
-  });
-  livekitRoom.on(RoomEvent.Disconnected, () => setStatus('Disconnected','#333'));
-  await livekitRoom.connect(url, token);
-
-  // Handle tracks already in room at connect time
-  livekitRoom.remoteParticipants.forEach((participant) => {
-    participant.trackPublications.forEach((pub) => {
-      if(pub.isSubscribed && pub.track) {
-        attachVideoTrack(pub.track);
-      } else {
-        pub.setSubscribed(true);
-      }
-    });
-  });
-
-  // Poll for avatar track — ElevenLabs connector may publish after connect
-  let attempts = 0;
-  const poll = setInterval(() => {
-    attempts++;
-    let found = false;
-    livekitRoom.remoteParticipants.forEach((participant) => {
-      participant.trackPublications.forEach((pub) => {
-        if(pub.kind === 'video') {
-          found = true;
-          if(pub.isSubscribed && pub.track) {
-            attachVideoTrack(pub.track);
-            clearInterval(poll);
-          } else {
-            pub.setSubscribed(true);
-          }
-        }
-      });
-    });
-    if(attempts > 30) clearInterval(poll);
-  }, 1000);
-}
+let sessionId=null, customerId=null;
 
 async function init() {
   setStatus('Getting session...','#f59e0b');
@@ -174,14 +103,10 @@ async function init() {
   renderEgo(d.ego_model, d.persona);
   loadKnowledge(); loadSessions();
 
-  if(!d.livekit_url || !d.livekit_client_token){
-    document.getElementById('lmsg').textContent='No LiveKit credentials — check ElevenLabs secret in admin panel';
-    setStatus('Not configured','#ef4444');
-    return;
-  }
-
-  setStatus('Connecting to avatar...','#f59e0b');
-  await connectLiveKit(d.livekit_url, d.livekit_client_token);
+  // Show iframe — ElevenLabs agent connector handles voice + video
+  document.getElementById('lmsg').style.display='none';
+  document.getElementById('avatarIframe').style.display='block';
+  setStatus('Connected — everything you say teaches your avatar','#4ade80');
 }
 
 async function trainText(text) {
