@@ -1,7 +1,7 @@
-import os, uuid, base64, hashlib, json, threading, time
+import os, uuid, base64, hashlib, json, threading
 import numpy as np
-from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, send_file, Response, g, session, redirect, url_for
+from datetime import datetime
+from flask import Flask, render_template, request, jsonify, send_file, g, session, redirect, url_for
 from flask_cors import CORS
 import requests
 import psycopg2
@@ -14,12 +14,12 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "trione-secret-change-in-prod")
 CORS(app)
 
-DATABASE_URL        = os.getenv("DATABASE_URL")
-GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY")
-ELEVENLABS_API_KEY  = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID")
-DID_API_KEY         = os.getenv("DID_API_KEY")
-DID_AGENT_ID        = os.getenv("DID_AGENT_ID")
+DATABASE_URL         = os.getenv("DATABASE_URL")
+GEMINI_API_KEY       = os.getenv("GEMINI_API_KEY")
+ELEVENLABS_API_KEY   = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_AGENT_ID  = os.getenv("ELEVENLABS_AGENT_ID")
+DID_API_KEY          = os.getenv("DID_API_KEY")
+DID_AGENT_ID         = os.getenv("DID_AGENT_ID")
 LIVEAVATAR_AVATAR_ID = os.getenv("LIVEAVATAR_AVATAR_ID", "")
 
 # ── DB ────────────────────────────────────────────────────────────────────────
@@ -121,29 +121,22 @@ def get_first_customer(db):
         cur.execute("SELECT * FROM ava_customers WHERE active=1 LIMIT 1")
         return cur.fetchone()
 
-def did_create_session(agent_id=None):
-    aid = agent_id or DID_AGENT_ID
-    if not aid:
-        return None, "Missing DID_AGENT_ID"
+# ── ElevenLabs signed URL (voice) ─────────────────────────────────────────────
 
-    if not DID_API_KEY or ":" not in DID_API_KEY:
-        return None, "DID_API_KEY must be in username:password format"
+def elevenlabs_signed_url(agent_id):
+    if not ELEVENLABS_API_KEY:
+        return None, "Missing ELEVENLABS_API_KEY"
+    r = requests.post(
+        "https://api.elevenlabs.io/v1/convai/conversation/get_signed_url",
+        headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+        json={"agent_id": agent_id},
+        timeout=15
+    )
+    if r.status_code != 200:
+        return None, f"ElevenLabs error {r.status_code}: {r.text}"
+    return r.json().get("signed_url"), None
 
-    token = base64.b64encode(DID_API_KEY.strip().encode()).decode()
-
-    url = f"https://api.d-id.com/agents/{aid}/sessions"
-    print("♦♦♦ D-ID REQUEST URL:", url)
-    print("♦♦♦ D-ID API_KEY (first 8 chars):", DID_API_KEY[:8] if DID_API_KEY else None)
-
-    headers = {
-        "Authorization": f"Basic {token}",
-        "Content-Type": "application/json",
-        "accept": "application/json"
-    }
-
-    r = requests.post(url, headers=headers, json={}, timeout=30)
-    print("♦♦♦ D-ID STATUS:", r.status_code)
-    print("♦♦♦ D-ID BODY:", r.text[:500])
+# ── Gemini ────────────────────────────────────────────────────────────────────
 
 def gemini(prompt, system=None):
     if not GEMINI_API_KEY: return ""
@@ -347,15 +340,15 @@ def user_session():
         )
     db.commit()
 
-    did_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or DID_AGENT_ID
-    did, err = did_create_session(did_agent_id)
+    el_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or ELEVENLABS_AGENT_ID
+    signed_url, err = elevenlabs_signed_url(el_agent_id)
     if err:
         return jsonify({"error": err}), 500
 
     return jsonify({
-        "did_session_id": did.get("session_id"),
-        "did_agent_id": did.get("agent_id"),
-        "did_chat_token": did.get("chat_token"),
+        "signed_url": signed_url,
+        "elevenlabs_agent_id": el_agent_id,
+        "did_agent_id": DID_AGENT_ID,
         "session_id": session_id,
         "customer_id": customer["id"],
         "customer_name": customer["name"],
@@ -425,8 +418,8 @@ def customer_session():
         )
     db.commit()
 
-    did_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or DID_AGENT_ID
-    did, err = did_create_session(did_agent_id)
+    el_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or ELEVENLABS_AGENT_ID
+    signed_url, err = elevenlabs_signed_url(el_agent_id)
     if err:
         return jsonify({"error": err}), 500
 
@@ -443,9 +436,9 @@ def customer_session():
         except: pass
 
     return jsonify({
-        "did_session_id": did.get("session_id"),
-        "did_agent_id": did.get("agent_id"),
-        "did_chat_token": did.get("chat_token"),
+        "signed_url": signed_url,
+        "elevenlabs_agent_id": el_agent_id,
+        "did_agent_id": DID_AGENT_ID,
         "session_id": session_id,
         "customer_id": customer["id"],
         "knowledge_count": knowledge_count,
@@ -662,12 +655,12 @@ def admin_stats():
     with db.cursor() as cur:
         stats = {}
         for table, key in [
-            ("ava_customers",     "total_customers"),
-            ("ava_users",         "total_users"),
-            ("ava_sessions",      "total_sessions"),
-            ("ava_messages",      "total_messages"),
-            ("ava_knowledge_base","total_knowledge_chunks"),
-            ("ava_ego_revisions", "total_ego_revisions")
+            ("ava_customers",      "total_customers"),
+            ("ava_users",          "total_users"),
+            ("ava_sessions",       "total_sessions"),
+            ("ava_messages",       "total_messages"),
+            ("ava_knowledge_base", "total_knowledge_chunks"),
+            ("ava_ego_revisions",  "total_ego_revisions")
         ]:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
             stats[key] = cur.fetchone()["count"]
