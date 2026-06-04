@@ -126,31 +126,24 @@ def did_create_session(agent_id=None):
     if not aid:
         return None, "Missing DID_AGENT_ID"
 
-    raw = f"{DID_API_KEY.strip()}"
-    encoded = base64.b64encode(raw.encode()).decode()
+    if not DID_API_KEY or ":" not in DID_API_KEY:
+        return None, "DID_API_KEY must be in username:password format"
+
+    token = base64.b64encode(DID_API_KEY.strip().encode()).decode()
+
+    url = f"https://api.d-id.com/agents/{aid}/sessions"
+    print("♦♦♦ D-ID REQUEST URL:", url)
+    print("♦♦♦ D-ID API_KEY (first 8 chars):", DID_API_KEY[:8] if DID_API_KEY else None)
 
     headers = {
-        "Authorization": f"Basic {encoded}",
+        "Authorization": f"Basic {token}",
         "Content-Type": "application/json",
         "accept": "application/json"
     }
 
-    try:
-        r = requests.post(
-            f"https://api.d-id.com/agents/{aid}/sessions",
-            headers=headers,
-            json={}
-        )
-        if r.status_code != 200:
-            return None, f"D-ID returned {r.status_code}: {r.text}"
-        data = r.json()
-        return {
-            "session_id": data.get("id"),
-            "chat_token": data.get("chat_token"),
-            "agent_id": aid
-        }, None
-    except Exception as e:
-        return None, str(e)
+    r = requests.post(url, headers=headers, json={}, timeout=30)
+    print("♦♦♦ D-ID STATUS:", r.status_code)
+    print("♦♦♦ D-ID BODY:", r.text[:500])
 
 def gemini(prompt, system=None):
     if not GEMINI_API_KEY: return ""
