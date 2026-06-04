@@ -64,10 +64,11 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
   <a href="/customer/logout">Sign out</a>
 </nav>
 <div class="layout">
-  <div class="vpanel" id="vpanel">
-    <p class="loading" id="lmsg">Connecting to your avatar...</p>
-    <video id="avatarVideo" autoplay playsinline></video>
-  </div>
+  <div class="vpanel" id="vpanel"></div> 
+  
+  <div class="side">
+    </div>
+</div>
   <div class="side">
     <div class="status-section">
       <div class="sdot" id="sDot"></div>
@@ -93,22 +94,30 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 let sessionId=null, customerId=null, didAgent=null;
 
 async function init() {
-  setStatus('Getting session...','#f59e0b');
-  const r=await fetch('/customer/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-  const d=await r.json();
-  if(d.error){document.getElementById('lmsg').textContent='Error: '+d.error;setStatus('Error','#ef4444');return;}
+  setStatus('Connecting to Agent...', '#f59e0b');
+  const r = await fetch('/customer/session', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+  const d = await r.json();
+  
+  if(d.error) {
+    document.getElementById('lmsg').textContent = 'Error: ' + d.error;
+    setStatus('Error', '#ef4444');
+    return;
+  }
 
-  sessionId=d.session_id; customerId=d.customer_id;
-  document.getElementById('kCount').textContent=d.knowledge_count+' chunks';
+  sessionId = d.session_id; 
+  customerId = d.customer_id;
+  
+  // No need to manually toggle display of 'avatarVideo' 
+  // as the D-ID script will handle the DOM injection into 'vpanel'
+  document.getElementById('lmsg').style.display = 'none';
+  
+  document.getElementById('kCount').textContent = d.knowledge_count + ' chunks';
   renderEgo(d.ego_model, d.persona);
-  loadKnowledge(); loadSessions();
+  loadKnowledge(); 
+  loadSessions();
 
-  // D-ID widget handles avatar — just show the panel
-  document.getElementById('lmsg').style.display='none';
-  document.getElementById('avatarVideo').style.display='none';
-  setStatus('Avatar ready — use the widget to talk','#4ade80');
+  setStatus('Avatar Active', '#4ade80');
 }
-
 async function trainText(text) {
   if(!text.trim()||!sessionId)return;
   const r=await fetch('/customer/train',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -175,14 +184,11 @@ init();
 </script>
 <script type="module"
       src="https://agent.d-id.com/v2/index.js"
-      data-mode="fabio"
+      data-mode="full"
       data-client-key="ck_9GCDUOVmW_bakvKO_Vw8e"
       data-agent-id="v2_agt_jgKxLh3e"
-      data-name="did-agent"
       data-monitor="true"
-      data-orientation="horizontal"
-      data-position="right"
-      data-open-mode="expanded">
-    </script>
+      data-target-id="vpanel">
+</script>
 </body>
 </html>
