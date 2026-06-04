@@ -157,23 +157,7 @@ def liveavatar_create_session(avatar_id=None, elevenlabs_secret_id=None, agent_i
     if not session_token:
         return None, f"No session_token in response: {r1.text}"
 
-    # Step 2 — start session
-    r2 = requests.post(
-        "https://api.liveavatar.com/v1/sessions/start",
-        headers={"Authorization": f"Bearer {session_token}", "Content-Type": "application/json"},
-        json={},
-        timeout=15
-    )
-    if r2.status_code not in (200, 201):
-        return None, f"LiveAvatar start error {r2.status_code}: {r2.text}"
-    session_data = r2.json().get("data", r2.json())
-    return {
-        "session_token": session_token,
-        "session_id": session_data.get("session_id"),
-        "livekit_url": session_data.get("livekit_url"),
-        "livekit_client_token": session_data.get("livekit_client_token"),
-        "ws_url": session_data.get("ws_url"),
-    }, None
+    return {"session_token": session_token}, None
 
 # ── Gemini ────────────────────────────────────────────────────────────────────
 
