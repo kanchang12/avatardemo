@@ -15,13 +15,13 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 .layout{display:flex;flex:1;overflow:hidden;height:calc(100vh - 50px)}
 .vpanel{flex:1;background:#0f0f1a;position:relative}
 #avatarVideo{width:100%;height:100%;object-fit:cover;display:block}
-.lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555;font-size:0.9rem;text-align:center;width:100%}
+.lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555;font-size:0.9rem;text-align:center;width:80%}
 .side{width:400px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
 .status-section{padding:12px 16px;border-bottom:1px solid #1e1e2e;flex-shrink:0;display:flex;align-items:center;gap:8px}
 .sdot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0}
 .stext{font-size:0.8rem;color:#888;flex:1}
 .controls{padding:10px 14px;border-bottom:1px solid #1e1e2e;display:flex;gap:8px;flex-shrink:0}
-.ctrl-btn{flex:1;padding:9px;border:none;border-radius:9px;cursor:pointer;font-size:0.82rem;font-weight:600}
+.ctrl-btn{flex:1;padding:9px;border:none;border-radius:9px;cursor:pointer;font-size:0.82rem;font-weight:600;transition:background 0.2s}
 .ctrl-btn.start{background:#a78bfa;color:#fff}
 .ctrl-btn.start:hover{background:#9061f9}
 .ctrl-btn.end{background:#ef4444;color:#fff}
@@ -99,7 +99,7 @@ nav a:hover{border-color:#a78bfa;color:#a78bfa}
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <script>
-let sessionId=null, customerId=null, livekitRoom=null, livekitUrl=null, livekitToken=null;
+let sessionId=null, customerId=null, room=null, livekitUrl=null, livekitToken=null;
 
 async function init() {
   setStatus('Connecting...','#f59e0b');
@@ -112,7 +112,7 @@ async function init() {
     livekitUrl=d.la_session.livekit_url;
     livekitToken=d.la_session.livekit_client_token;
     document.getElementById('kCount').textContent=d.knowledge_count+' chunks';
-    renderEgo(d.ego_model, d.persona);
+    renderEgo(d.ego_model,d.persona);
     loadKnowledge();
     loadSessions();
     setStatus('Ready','#4ade80');
@@ -125,44 +125,47 @@ async function startConversation() {
   document.getElementById('startBtn').disabled=true;
   setStatus('Connecting...','#f59e0b');
   try {
-    const { Room, RoomEvent, Track } = LivekitClient;
-    livekitRoom=new Room();
+    room = new LivekitClient.Room({ adaptiveStream:true, dynacast:true });
 
-    livekitRoom.on(RoomEvent.TrackSubscribed,(track,pub,participant)=>{
-      if(track.kind===Track.Kind.Video){
+    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+      if(track.kind === LivekitClient.Track.Kind.Video) {
         track.attach(document.getElementById('avatarVideo'));
         document.getElementById('lmsg').style.display='none';
         setStatus('Live','#4ade80');
         document.getElementById('endBtn').disabled=false;
       }
-      if(track.kind===Track.Kind.Audio) track.attach();
+      if(track.kind === LivekitClient.Track.Kind.Audio) {
+        track.attach();
+      }
     });
 
-    livekitRoom.on(RoomEvent.DataReceived,(data)=>{
+    room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
       try {
-        const msg=JSON.parse(new TextDecoder().decode(data));
-        if(msg.event_type==='user.transcription'&&msg.text) trainText(msg.text);
+        const msg=JSON.parse(new TextDecoder().decode(payload));
+        if(topic==='agent-response' && msg.event_type==='user.transcription' && msg.text) {
+          trainText(msg.text);
+        }
       } catch(e){}
     });
 
-    livekitRoom.on(RoomEvent.Disconnected,()=>{
+    room.on(LivekitClient.RoomEvent.Disconnected, ()=>{
       setStatus('Ended','#888');
       document.getElementById('startBtn').disabled=false;
       document.getElementById('endBtn').disabled=true;
     });
 
-    await livekitRoom.connect(livekitUrl, livekitToken);
-    await livekitRoom.localParticipant.setMicrophoneEnabled(true);
+    await room.connect(livekitUrl, livekitToken);
+    await room.localParticipant.setMicrophoneEnabled(true);
 
   } catch(e){
-    setStatus('Error','#ef4444');
+    setStatus('Error: '+e.message,'#ef4444');
     document.getElementById('startBtn').disabled=false;
     console.error(e);
   }
 }
 
 async function endConversation() {
-  if(livekitRoom){await livekitRoom.disconnect();livekitRoom=null;}
+  if(room){await room.disconnect();room=null;}
   document.getElementById('endBtn').disabled=true;
   document.getElementById('startBtn').disabled=false;
   setStatus('Ended','#888');
