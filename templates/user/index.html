@@ -32,7 +32,7 @@ h1{font-size:3rem;letter-spacing:4px;color:#a78bfa;margin-bottom:12px;text-align
 .status-pill{display:flex;align-items:center;gap:6px;margin-left:auto;font-size:0.8rem;color:#888}
 .sdot{width:8px;height:8px;border-radius:50%;background:#333}
 .talk-body{display:flex;flex:1;overflow:hidden}
-.vpanel{flex:1;background:#0f0f1a;position:relative}
+.vpanel{flex:1;background:#0f0f1a;position:relative;overflow:hidden}
 #avatarVideo{width:100%;height:100%;object-fit:cover;display:block}
 .lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555;font-size:0.9rem;text-align:center;width:80%}
 .side{width:340px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column}
@@ -168,8 +168,9 @@ async function launchPage() {
     livekitUrl=d.la_session.livekit_url;
     livekitToken=d.la_session.livekit_client_token;
     setStatus('Ready','#4ade80');
-    setMsg('Ready — click Start to talk');
     document.getElementById('startBtn').disabled=false;
+    // auto-start
+    startConversation();
   } catch(e){setStatus('Error','#ef4444');setMsg('Connection error: '+e.message);}
 }
 
