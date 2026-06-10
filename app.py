@@ -77,6 +77,21 @@ def init_db():
         except Exception as e:
             print(f"Table create warning: {e}")
 
+    # ── Migrations: add columns to tables that already existed from older versions ──
+    migrations = [
+        "ALTER TABLE ava_users ADD COLUMN IF NOT EXISTS password_hash TEXT",
+        "ALTER TABLE ava_customers ADD COLUMN IF NOT EXISTS voice_id TEXT",
+        "ALTER TABLE ava_customers ADD COLUMN IF NOT EXISTS photo_path TEXT",
+    ]
+    for sql in migrations:
+        try:
+            with psycopg2.connect(DATABASE_URL) as db:
+                with db.cursor() as cur:
+                    cur.execute(sql)
+                db.commit()
+        except Exception as e:
+            print(f"Migration warning: {e}")
+
 init_db()
 
 # ── Seed admin ────────────────────────────────────────────────────────────────
