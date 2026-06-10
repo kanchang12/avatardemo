@@ -4,17 +4,19 @@ RUN apt-get update && apt-get install -y \
     build-essential cmake git \
     libopenblas-dev liblapack-dev \
     libx11-dev libgtk-3-dev \
+    libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir git+https://github.com/ageitgey/face_recognition_models
 
 COPY . .
-RUN mkdir -p static
+RUN mkdir -p static recordings
 
-EXPOSE 5000
+ENV PORT=8080
+EXPOSE 8080
 
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120"]
+# Cloud Run: bind to $PORT, single worker keeps face-recognition memory sane; bump timeout for Gemini+TTS
+CMD exec gunicorn app:app --bind 0.0.0.0:${PORT} --workers 1 --threads 4 --timeout 180

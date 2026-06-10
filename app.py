@@ -14,15 +14,15 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "trione-secret-change-in-prod")
 CORS(app)
 
-DATABASE_URL         = os.getenv("DATABASE_URL")
-GEMINI_API_KEY       = os.getenv("GEMINI_API_KEY")
-ELEVENLABS_API_KEY   = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_AGENT_ID  = os.getenv("ELEVENLABS_AGENT_ID")
-DID_API_KEY          = os.getenv("DID_API_KEY")
-DID_AGENT_ID         = os.getenv("DID_AGENT_ID")
-LIVEAVATAR_API_KEY   = os.getenv("LIVEAVATAR_API_KEY", "")
-LIVEAVATAR_AVATAR_ID   = os.getenv("LIVEAVATAR_AVATAR_ID", "")
-ELEVENLABS_SECRET_ID  = os.getenv("ELEVENLABS_SECRET_ID", "")
+DATABASE_URL        = os.getenv("DATABASE_URL")
+GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL        = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+ELEVENLABS_API_KEY  = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")          # Petar's cloned voice (voice ID only)
+ELEVENLABS_MODEL    = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
+RECORDINGS_DIR      = os.getenv("RECORDINGS_DIR", os.path.join(os.path.dirname(__file__), "recordings"))
+
+os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -42,12 +42,12 @@ def init_db():
     tables = [
         """CREATE TABLE IF NOT EXISTS ava_customers (
             id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL, avatar_id TEXT, elevenlabs_agent_id TEXT,
-            elevenlabs_secret_id TEXT, persona_summary TEXT, ego_model TEXT,
+            password_hash TEXT NOT NULL, voice_id TEXT, photo_path TEXT,
+            persona_summary TEXT, ego_model TEXT,
             created_at TEXT, active INTEGER DEFAULT 1)""",
         """CREATE TABLE IF NOT EXISTS ava_users (
             id TEXT PRIMARY KEY, face_encoding TEXT, name TEXT DEFAULT 'Guest',
-            first_seen TEXT, last_seen TEXT, visit_count INTEGER DEFAULT 1)""",
+            password_hash TEXT, first_seen TEXT, last_seen TEXT, visit_count INTEGER DEFAULT 1)""",
         """CREATE TABLE IF NOT EXISTS ava_sessions (
             id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, user_id TEXT,
             session_type TEXT NOT NULL, started_at TEXT, ended_at TEXT)""",
@@ -60,6 +60,10 @@ def init_db():
         """CREATE TABLE IF NOT EXISTS ava_ego_revisions (
             id SERIAL PRIMARY KEY, customer_id TEXT NOT NULL, revision TEXT NOT NULL,
             trigger_text TEXT, created_at TEXT)""",
+        """CREATE TABLE IF NOT EXISTS ava_recordings (
+            id TEXT PRIMARY KEY, customer_id TEXT NOT NULL, session_id TEXT,
+            filename TEXT NOT NULL, mime TEXT, size_bytes INTEGER,
+            transcript TEXT, created_at TEXT)""",
         """CREATE TABLE IF NOT EXISTS ava_admins (
             id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL, created_at TEXT)""",
@@ -78,40 +82,27 @@ init_db()
 # ── Seed admin ────────────────────────────────────────────────────────────────
 
 def seed_admin():
-    with psycopg2.connect(DATABASE_URL) as db:
-        with db.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM ava_admins")
-            if cur.fetchone()[0] == 0:
-                cur.execute(
-                    "INSERT INTO ava_admins (id,email,password_hash,created_at) VALUES (%s,%s,%s,%s)",
-                    (str(uuid.uuid4()), "admin@example.com",
-                     hashlib.sha256("password".encode()).hexdigest(),
-                     datetime.utcnow().isoformat())
-                )
-        db.commit()
-        print("Default admin: admin@example.com / password")
+    try:
+        with psycopg2.connect(DATABASE_URL) as db:
+            with db.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM ava_admins")
+                if cur.fetchone()[0] == 0:
+                    cur.execute(
+                        "INSERT INTO ava_admins (id,email,password_hash,created_at) VALUES (%s,%s,%s,%s)",
+                        (str(uuid.uuid4()), os.getenv("ADMIN_EMAIL", "admin@example.com"),
+                         hashlib.sha256(os.getenv("ADMIN_PASSWORD", "password").encode()).hexdigest(),
+                         datetime.utcnow().isoformat())
+                    )
+            db.commit()
+            print("Default admin seeded.")
+    except Exception as e:
+        print(f"Admin seed warning: {e}")
 
 seed_admin()
 
-# ── Seed customer from env ────────────────────────────────────────────────────
-
-def seed_customer():
-    agent_id = DID_AGENT_ID
-    if not agent_id:
-        return
-    with psycopg2.connect(DATABASE_URL) as db:
-        with db.cursor() as cur:
-            cur.execute(
-                "UPDATE ava_customers SET elevenlabs_agent_id=%s WHERE elevenlabs_agent_id IS NULL OR elevenlabs_agent_id=''",
-                (agent_id,)
-            )
-        db.commit()
-
-seed_customer()
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def hash_pw(pw): return hashlib.sha256(pw.encode()).hexdigest()
+def hash_pw(pw): return hashlib.sha256((pw or "").encode()).hexdigest()
 
 def get_customer(db, cid):
     with db.cursor() as cur:
@@ -120,82 +111,81 @@ def get_customer(db, cid):
 
 def get_first_customer(db):
     with db.cursor() as cur:
-        cur.execute("SELECT * FROM ava_customers WHERE active=1 LIMIT 1")
+        cur.execute("SELECT * FROM ava_customers WHERE active=1 ORDER BY created_at LIMIT 1")
         return cur.fetchone()
 
-# ── ElevenLabs signed URL (voice) ─────────────────────────────────────────────
-
-def liveavatar_create_session(avatar_id=None, elevenlabs_secret_id=None, agent_id=None):
-    if not LIVEAVATAR_API_KEY:
-        return None, "Missing LIVEAVATAR_API_KEY"
-    aid = avatar_id or LIVEAVATAR_AVATAR_ID
-    if not aid:
-        return None, "Missing LIVEAVATAR_AVATAR_ID"
-    el_agent = agent_id or ELEVENLABS_AGENT_ID
-    el_secret = elevenlabs_secret_id or ELEVENLABS_SECRET_ID or ""
-
-    headers = {"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"}
-
-    # Step 1 — create session token
-    token_payload = {
-        "mode": "LITE",
-        "avatar_id": aid,
-        "elevenlabs_agent_config": {
-            "secret_id": el_secret,
-            "agent_id": el_agent
-        }
-    }
-    r1 = requests.post(
-        "https://api.liveavatar.com/v1/sessions/token",
-        headers=headers,
-        json=token_payload,
-        timeout=15
-    )
-    if r1.status_code not in (200, 201):
-        return None, f"LiveAvatar token error {r1.status_code}: {r1.text}"
-    token_data = r1.json().get("data", r1.json())
-    session_token = token_data.get("session_token") or token_data.get("token")
-    if not session_token:
-        return None, f"No session_token in response: {r1.text}"
-
-    # Step 2 — start session, get livekit credentials
-    r2 = requests.post(
-        "https://api.liveavatar.com/v1/sessions/start",
-        headers={"Authorization": f"Bearer {session_token}", "Content-Type": "application/json"},
-        json={},
-        timeout=15
-    )
-    if r2.status_code not in (200, 201):
-        return None, f"LiveAvatar start error {r2.status_code}: {r2.text}"
-    sd = r2.json().get("data", r2.json())
-    return {
-        "session_id":           sd.get("session_id"),
-        "livekit_url":          sd.get("livekit_url"),
-        "livekit_client_token": sd.get("livekit_client_token"),
-        "ws_url":               sd.get("ws_url", ""),
-    }, None
-
-# ── Gemini ────────────────────────────────────────────────────────────────────
+# ── Gemini (the brain) ─────────────────────────────────────────────────────────
 
 def gemini(prompt, system=None):
     if not GEMINI_API_KEY: return ""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
     contents = []
     if system:
         contents.append({"role": "user", "parts": [{"text": system}]})
         contents.append({"role": "model", "parts": [{"text": "Understood."}]})
     contents.append({"role": "user", "parts": [{"text": prompt}]})
-    r = requests.post(url, json={"contents": contents})
-    if r.status_code == 200:
-        return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+    try:
+        r = requests.post(url, json={"contents": contents}, timeout=60)
+        if r.status_code == 200:
+            return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+        print(f"Gemini error {r.status_code}: {r.text[:300]}")
+    except Exception as e:
+        print(f"Gemini exception: {e}")
     return ""
 
+def gemini_reply(persona_context, history, user_msg, speaker_name="Guest"):
+    """Generate a reply AS the digital twin (Petar), grounded in his EGO."""
+    convo = "\n".join(f"{m['speaker']}: {m['text']}" for m in history[-12:])
+    system = f"""You ARE this person speaking in first person. Stay fully in character.
+Never say you are an AI or a model. Answer as the person would, using their beliefs,
+values, memories and relationships below. If something is not in your knowledge,
+respond as the person honestly would ("I don't recall that") rather than inventing facts.
+Keep replies natural, spoken-length (1-4 sentences unless asked for more).
+
+{persona_context if persona_context else "(No persona learned yet — speak warmly and ask the visitor to tell you about themselves.)"}"""
+    prompt = f"""Recent conversation:
+{convo}
+
+{speaker_name} just said: "{user_msg}"
+
+Reply now, in first person, as yourself:"""
+    return gemini(prompt, system) or "I'm here. Tell me what's on your mind."
+
 def parse_json(text):
-    text = text.strip().strip("```json").strip("```").strip()
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    text = text.strip()
     try: return json.loads(text)
     except: return None
 
-# ── EGO Engine ────────────────────────────────────────────────────────────────
+# ── ElevenLabs (voice ID only) ─────────────────────────────────────────────────
+
+def elevenlabs_tts(text, voice_id=None):
+    """Synthesize speech with the cloned voice ID. Returns (b64_mp3, error)."""
+    vid = (voice_id or ELEVENLABS_VOICE_ID or "").strip()
+    if not ELEVENLABS_API_KEY:
+        return None, "Missing ELEVENLABS_API_KEY"
+    if not vid:
+        return None, "Missing ELEVENLABS_VOICE_ID"
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{vid}"
+    headers = {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
+    payload = {
+        "text": text,
+        "model_id": ELEVENLABS_MODEL,
+        "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}
+    }
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=60)
+        if r.status_code == 200:
+            return base64.b64encode(r.content).decode(), None
+        return None, f"ElevenLabs error {r.status_code}: {r.text[:200]}"
+    except Exception as e:
+        return None, f"ElevenLabs exception: {e}"
+
+# ── EGO engine ──────────────────────────────────────────────────────────────────
 
 def extract_ego(text, existing_ego_summary="", speaker_context="general conversation"):
     prompt = f"""You are building an Artificial EGO — a living model of a person's identity, reasoning and relationships.
@@ -223,40 +213,43 @@ Extract and return ONLY valid JSON, no markdown:
     }
 
 def update_ego_model(customer_id, new_ego_data, trigger_text):
-    with psycopg2.connect(DATABASE_URL) as db:
-        db.autocommit = False
-        with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT ego_model, persona_summary FROM ava_customers WHERE id=%s", (customer_id,))
-            row = cur.fetchone()
-            existing = {}
-            if row and row["ego_model"]:
-                try: existing = json.loads(row["ego_model"])
-                except: pass
+    try:
+        with psycopg2.connect(DATABASE_URL) as db:
+            db.autocommit = False
+            with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("SELECT ego_model, persona_summary FROM ava_customers WHERE id=%s", (customer_id,))
+                row = cur.fetchone()
+                existing = {}
+                if row and row["ego_model"]:
+                    try: existing = json.loads(row["ego_model"])
+                    except: pass
 
-            for key in ["beliefs", "reasoning_patterns", "values"]:
-                existing[key] = list(set(existing.get(key, []) + new_ego_data.get(key, [])))
+                for key in ["beliefs", "reasoning_patterns", "values"]:
+                    existing[key] = list(set(existing.get(key, []) + new_ego_data.get(key, [])))
 
-            rels = existing.get("relationships", {})
-            for person, dynamic in new_ego_data.get("relationships", {}).items():
-                rels[person] = (rels.get(person, "") + " | " + dynamic).strip(" | ")
-            existing["relationships"] = rels
+                rels = existing.get("relationships", {})
+                for person, dynamic in new_ego_data.get("relationships", {}).items():
+                    rels[person] = (rels.get(person, "") + " | " + dynamic).strip(" | ")
+                existing["relationships"] = rels
 
-            contradictions = existing.get("contradictions", [])
-            contradictions.extend(new_ego_data.get("contradictions", []))
-            existing["contradictions"] = contradictions[-20:]
+                contradictions = existing.get("contradictions", [])
+                contradictions.extend(new_ego_data.get("contradictions", []))
+                existing["contradictions"] = contradictions[-20:]
 
-            summary = gemini(f"Summarise this person's core identity in 3 sentences:\n{json.dumps(existing, indent=2)}")
-            existing["summary"] = summary
-            existing["last_updated"] = datetime.utcnow().isoformat()
+                summary = gemini(f"Summarise this person's core identity in 3 sentences:\n{json.dumps(existing, indent=2)}")
+                existing["summary"] = summary
+                existing["last_updated"] = datetime.utcnow().isoformat()
 
-            ego_json = json.dumps(existing)
-            cur.execute("UPDATE ava_customers SET ego_model=%s, persona_summary=%s WHERE id=%s",
-                        (ego_json, summary, customer_id))
-            cur.execute(
-                "INSERT INTO ava_ego_revisions (customer_id, revision, trigger_text, created_at) VALUES (%s,%s,%s,%s)",
-                (customer_id, ego_json, trigger_text[:500], datetime.utcnow().isoformat())
-            )
-        db.commit()
+                ego_json = json.dumps(existing)
+                cur.execute("UPDATE ava_customers SET ego_model=%s, persona_summary=%s WHERE id=%s",
+                            (ego_json, summary, customer_id))
+                cur.execute(
+                    "INSERT INTO ava_ego_revisions (customer_id, revision, trigger_text, created_at) VALUES (%s,%s,%s,%s)",
+                    (customer_id, ego_json, trigger_text[:500], datetime.utcnow().isoformat())
+                )
+            db.commit()
+    except Exception as e:
+        print(f"EGO update error: {e}")
 
 def get_ego_context(db, customer_id):
     with db.cursor() as cur:
@@ -312,105 +305,141 @@ def find_face(db, enc, tolerance=0.5):
     return None
 
 # ════════════════════════════════════════════════════════════════════════════
-# USER PORTAL
+# USER PORTAL  —  identified by face image + password, talks to Petar's twin
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.route("/")
 def user_home():
     return render_template("user/index.html")
 
-@app.route("/u/identify", methods=["GET", "POST"])
+@app.route("/u/identify", methods=["POST"])
 def user_identify():
+    """image + password. New face -> register (needs name + password). Known face -> verify password."""
     data = request.get_json(silent=True) or {}
     b64 = data.get("image")
+    password = data.get("password", "")
+    name = (data.get("name") or "").strip()
     db = get_db()
-    user_id = str(uuid.uuid4())
-    returning = False
-    name = "Guest"
 
-    if b64:
-        enc = encode_face(b64)
-        if enc is not None:
-            match = find_face(db, enc)
-            if match:
-                user_id = match["id"]; name = match["name"]; returning = True
-                with db.cursor() as cur:
-                    cur.execute(
-                        "UPDATE ava_users SET last_seen=%s, visit_count=visit_count+1 WHERE id=%s",
-                        (datetime.utcnow().isoformat(), user_id)
-                    )
-            else:
-                with db.cursor() as cur:
-                    cur.execute(
-                        "INSERT INTO ava_users (id, face_encoding, name, first_seen, last_seen) VALUES (%s,%s,%s,%s,%s)",
-                        (user_id, json.dumps(enc.tolist()), "Guest",
-                         datetime.utcnow().isoformat(), datetime.utcnow().isoformat())
-                    )
+    enc = encode_face(b64) if b64 else None
+    if enc is None:
+        return jsonify({"error": "No face detected. Center your face and try again."}), 400
+
+    match = find_face(db, enc)
+
+    if match:
+        # returning user — verify password
+        if not match.get("password_hash"):
+            # legacy/no password set yet — set it now
+            with db.cursor() as cur:
+                cur.execute("UPDATE ava_users SET password_hash=%s, last_seen=%s, visit_count=visit_count+1 WHERE id=%s",
+                            (hash_pw(password), datetime.utcnow().isoformat(), match["id"]))
             db.commit()
+        elif match["password_hash"] != hash_pw(password):
+            return jsonify({"error": "Password does not match this face.", "known": True}), 401
+        else:
+            with db.cursor() as cur:
+                cur.execute("UPDATE ava_users SET last_seen=%s, visit_count=visit_count+1 WHERE id=%s",
+                            (datetime.utcnow().isoformat(), match["id"]))
+            db.commit()
+        user_id, uname, returning = match["id"], match["name"], True
+    else:
+        # new user — register
+        if not password:
+            return jsonify({"error": "New here — set a password to remember you.", "register": True}), 200
+        user_id = str(uuid.uuid4())
+        uname = name or "Guest"
+        with db.cursor() as cur:
+            cur.execute(
+                "INSERT INTO ava_users (id, face_encoding, name, password_hash, first_seen, last_seen) VALUES (%s,%s,%s,%s,%s,%s)",
+                (user_id, json.dumps(enc.tolist()), uname, hash_pw(password),
+                 datetime.utcnow().isoformat(), datetime.utcnow().isoformat())
+            )
+        db.commit()
+        returning = False
+
+    session["user_id"] = user_id
 
     with db.cursor() as cur:
-        cur.execute(
-            "SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 20",
-            (user_id,)
-        )
+        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 20", (user_id,))
         history = cur.fetchall()
 
+    customer = get_first_customer(db)
     return jsonify({
-        "user_id": user_id, "name": name, "returning": returning,
+        "ok": True, "user_id": user_id, "name": uname, "returning": returning,
+        "avatar_name": customer["name"] if customer else "the avatar",
         "history": [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(history)]
     })
 
-@app.route("/u/session", methods=["GET", "POST"])
+@app.route("/u/session", methods=["POST"])
 def user_session():
-    data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id", str(uuid.uuid4()))
+    if "user_id" not in session:
+        return jsonify({"error": "Not identified"}), 401
     db = get_db()
-
     customer = get_first_customer(db)
     if not customer:
         return jsonify({"error": "No active avatar found"}), 404
 
-    rag_context = get_ego_context(db, customer["id"])
     session_id = str(uuid.uuid4())
     with db.cursor() as cur:
         cur.execute(
             "INSERT INTO ava_sessions (id, customer_id, user_id, session_type, started_at) VALUES (%s,%s,%s,%s,%s)",
-            (session_id, customer["id"], user_id, "user_chat", datetime.utcnow().isoformat())
+            (session_id, customer["id"], session["user_id"], "user_chat", datetime.utcnow().isoformat())
         )
     db.commit()
-
-    el_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or ELEVENLABS_AGENT_ID
-    el_secret_id = (customer.get("elevenlabs_secret_id") or "").strip()
-    avatar_id = (customer.get("avatar_id") or "").strip() or LIVEAVATAR_AVATAR_ID
-
-    la_session, err = liveavatar_create_session(avatar_id, el_secret_id, el_agent_id)
-    if err:
-        return jsonify({"error": err}), 500
-
     return jsonify({
-        "la_session": la_session,
         "session_id": session_id,
         "customer_id": customer["id"],
         "customer_name": customer["name"],
-        "rag_context": rag_context,
         "persona": customer["persona_summary"] or ""
     })
 
-@app.route("/u/message", methods=["GET", "POST"])
-def user_message():
+@app.route("/u/talk", methods=["POST"])
+def user_talk():
+    """User message -> Gemini reply AS Petar -> ElevenLabs voice. Stores both turns."""
+    if "user_id" not in session:
+        return jsonify({"error": "Not identified"}), 401
     data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    session_id = data.get("session_id")
+    if not text:
+        return jsonify({"error": "Empty message"}), 400
+
     db = get_db()
+    customer = get_first_customer(db)
+    if not customer:
+        return jsonify({"error": "No active avatar"}), 404
+    cid = customer["id"]
+    uid = session["user_id"]
+
+    # user name for context
     with db.cursor() as cur:
-        cur.execute(
-            "INSERT INTO ava_messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s,%s)",
-            (data.get("session_id"), data.get("customer_id"), data.get("user_id"),
-             data.get("speaker"), data.get("text"), datetime.utcnow().isoformat())
-        )
+        cur.execute("SELECT name FROM ava_users WHERE id=%s", (uid,))
+        row = cur.fetchone()
+    speaker_name = row["name"] if row else "Guest"
+
+    # history
+    with db.cursor() as cur:
+        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 12", (uid,))
+        history = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(cur.fetchall())]
+
+    persona_context = get_ego_context(db, cid)
+    reply = gemini_reply(persona_context, history, text, speaker_name)
+
+    # store both turns
+    now = datetime.utcnow().isoformat()
+    with db.cursor() as cur:
+        cur.execute("INSERT INTO ava_messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s,%s)",
+                    (session_id, cid, uid, "user", text, now))
+        cur.execute("INSERT INTO ava_messages (session_id, customer_id, user_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s,%s)",
+                    (session_id, cid, uid, "avatar", reply, datetime.utcnow().isoformat()))
     db.commit()
-    return jsonify({"ok": True})
+
+    audio_b64, voice_err = elevenlabs_tts(reply, customer.get("voice_id"))
+    return jsonify({"reply": reply, "audio": audio_b64, "voice_error": voice_err})
 
 # ════════════════════════════════════════════════════════════════════════════
-# CUSTOMER PORTAL
+# CUSTOMER PORTAL  —  Petar trains his twin: record + transcribe + learn
 # ════════════════════════════════════════════════════════════════════════════
 
 @app.route("/customer/login", methods=["GET", "POST"])
@@ -419,10 +448,8 @@ def customer_login():
         data = request.get_json(silent=True) or {}
         db = get_db()
         with db.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM ava_customers WHERE email=%s AND password_hash=%s",
-                (data.get("email"), hash_pw(data.get("password", "")))
-            )
+            cur.execute("SELECT * FROM ava_customers WHERE email=%s AND password_hash=%s",
+                        (data.get("email"), hash_pw(data.get("password", ""))))
             c = cur.fetchone()
         if c:
             session["customer_id"] = c["id"]
@@ -441,7 +468,7 @@ def customer_home():
         return redirect(url_for("customer_login"))
     return render_template("customer/index.html")
 
-@app.route("/customer/session", methods=["GET", "POST"])
+@app.route("/customer/session", methods=["POST"])
 def customer_session():
     if "customer_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
@@ -452,26 +479,11 @@ def customer_session():
 
     session_id = str(uuid.uuid4())
     with db.cursor() as cur:
-        cur.execute(
-            "INSERT INTO ava_sessions (id, customer_id, session_type, started_at) VALUES (%s,%s,%s,%s)",
-            (session_id, customer["id"], "customer_training", datetime.utcnow().isoformat())
-        )
-    db.commit()
-
-    el_agent_id = (customer.get("elevenlabs_agent_id") or "").strip() or ELEVENLABS_AGENT_ID
-    el_secret_id = (customer.get("elevenlabs_secret_id") or "").strip()
-    avatar_id = (customer.get("avatar_id") or "").strip() or LIVEAVATAR_AVATAR_ID
-
-    la_session, err = liveavatar_create_session(avatar_id, el_secret_id, el_agent_id)
-    if err:
-        return jsonify({"error": err}), 500
-
-    with db.cursor() as cur:
-        cur.execute(
-            "SELECT COUNT(*) as cnt FROM ava_knowledge_base WHERE customer_id=%s",
-            (customer["id"],)
-        )
+        cur.execute("INSERT INTO ava_sessions (id, customer_id, session_type, started_at) VALUES (%s,%s,%s,%s)",
+                    (session_id, customer["id"], "customer_training", datetime.utcnow().isoformat()))
+        cur.execute("SELECT COUNT(*) as cnt FROM ava_knowledge_base WHERE customer_id=%s", (customer["id"],))
         knowledge_count = cur.fetchone()["cnt"]
+    db.commit()
 
     ego = None
     if customer["ego_model"]:
@@ -479,20 +491,20 @@ def customer_session():
         except: pass
 
     return jsonify({
-        "la_session": la_session,
         "session_id": session_id,
         "customer_id": customer["id"],
+        "name": customer["name"],
         "knowledge_count": knowledge_count,
         "persona": customer["persona_summary"] or "",
         "ego_model": ego
     })
 
-@app.route("/customer/train", methods=["GET", "POST"])
+@app.route("/customer/train", methods=["POST"])
 def customer_train():
     if "customer_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
     data = request.get_json(silent=True) or {}
-    text = data.get("text", "").strip()
+    text = (data.get("text") or "").strip()
     session_id = data.get("session_id")
     if not text or len(text) < 5:
         return jsonify({"ok": True, "chunks_added": 0})
@@ -501,10 +513,8 @@ def customer_train():
     customer_id = session["customer_id"]
 
     with db.cursor() as cur:
-        cur.execute(
-            "INSERT INTO ava_messages (session_id, customer_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s)",
-            (session_id, customer_id, "customer", text, datetime.utcnow().isoformat())
-        )
+        cur.execute("INSERT INTO ava_messages (session_id, customer_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s)",
+                    (session_id, customer_id, "customer", text, datetime.utcnow().isoformat()))
     db.commit()
 
     customer = get_customer(db, customer_id)
@@ -516,19 +526,14 @@ def customer_train():
             if chunk.get("chunk"):
                 cur.execute(
                     "INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
-                    (customer_id, chunk["chunk"], session_id, chunk.get("category", "fact"), "raw", datetime.utcnow().isoformat())
-                )
+                    (customer_id, chunk["chunk"], session_id, chunk.get("category", "fact"), "raw", datetime.utcnow().isoformat()))
                 chunks_added += 1
         for belief in ego_data.get("beliefs", []):
-            cur.execute(
-                "INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
-                (customer_id, belief, session_id, "belief", "ego", datetime.utcnow().isoformat())
-            )
+            cur.execute("INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (customer_id, belief, session_id, "belief", "ego", datetime.utcnow().isoformat()))
         for value in ego_data.get("values", []):
-            cur.execute(
-                "INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
-                (customer_id, value, session_id, "value", "ego", datetime.utcnow().isoformat())
-            )
+            cur.execute("INSERT INTO ava_knowledge_base (customer_id, chunk, source_session_id, category, ego_layer, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (customer_id, value, session_id, "value", "ego", datetime.utcnow().isoformat()))
     db.commit()
 
     threading.Thread(target=update_ego_model, args=(customer_id, ego_data, text), daemon=True).start()
@@ -540,61 +545,76 @@ def customer_train():
         "values_extracted": len(ego_data.get("values", []))
     })
 
-@app.route("/customer/ego", methods=["GET", "POST"])
-def customer_ego():
+@app.route("/customer/upload_recording", methods=["POST"])
+def customer_upload_recording():
+    """Receives the browser MediaRecorder blob (open-source camera). Stores to disk + DB."""
+    if "customer_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    if "file" not in request.files:
+        return jsonify({"error": "No file"}), 400
+    f = request.files["file"]
+    session_id = request.form.get("session_id", "")
+    transcript = request.form.get("transcript", "")
+    rec_id = str(uuid.uuid4())
+    ext = "webm" if "webm" in (f.mimetype or "") else "bin"
+    fname = f"{session['customer_id']}_{rec_id}.{ext}"
+    path = os.path.join(RECORDINGS_DIR, fname)
+    f.save(path)
+    size = os.path.getsize(path)
+
+    db = get_db()
+    with db.cursor() as cur:
+        cur.execute(
+            "INSERT INTO ava_recordings (id, customer_id, session_id, filename, mime, size_bytes, transcript, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (rec_id, session["customer_id"], session_id, fname, f.mimetype, size, transcript, datetime.utcnow().isoformat()))
+    db.commit()
+    return jsonify({"ok": True, "recording_id": rec_id, "size_bytes": size})
+
+@app.route("/customer/recordings")
+def customer_recordings():
     if "customer_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
     db = get_db()
-    c = get_customer(db, session["customer_id"])
-    ego = None
-    if c["ego_model"]:
-        try: ego = json.loads(c["ego_model"])
-        except: pass
-    return jsonify({"ego": ego, "summary": c["persona_summary"] or ""})
+    with db.cursor() as cur:
+        cur.execute("SELECT id, filename, mime, size_bytes, transcript, created_at FROM ava_recordings WHERE customer_id=%s ORDER BY created_at DESC LIMIT 50",
+                    (session["customer_id"],))
+        rows = cur.fetchall()
+    return jsonify([dict(r) for r in rows])
 
-@app.route("/customer/knowledge", methods=["GET", "POST"])
+@app.route("/customer/recording/<rid>")
+def customer_recording_file(rid):
+    if "customer_id" not in session:
+        return jsonify({"error": "Not logged in"}), 401
+    db = get_db()
+    with db.cursor() as cur:
+        cur.execute("SELECT filename, mime FROM ava_recordings WHERE id=%s AND customer_id=%s", (rid, session["customer_id"]))
+        r = cur.fetchone()
+    if not r:
+        return jsonify({"error": "Not found"}), 404
+    return send_file(os.path.join(RECORDINGS_DIR, r["filename"]), mimetype=r["mime"] or "video/webm")
+
+@app.route("/customer/knowledge")
 def customer_knowledge():
     if "customer_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
-        cur.execute(
-            "SELECT id, chunk, category, ego_layer, created_at FROM ava_knowledge_base WHERE customer_id=%s ORDER BY created_at DESC",
-            (session["customer_id"],)
-        )
+        cur.execute("SELECT id, chunk, category, ego_layer, created_at FROM ava_knowledge_base WHERE customer_id=%s ORDER BY created_at DESC",
+                    (session["customer_id"],))
         chunks = cur.fetchall()
     return jsonify([dict(c) for c in chunks])
 
-@app.route("/customer/knowledge/<int:kid>", methods=["GET", "POST", "DELETE"])
+@app.route("/customer/knowledge/<int:kid>", methods=["DELETE"])
 def delete_knowledge(kid):
     if "customer_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
     db = get_db()
     with db.cursor() as cur:
-        cur.execute(
-            "DELETE FROM ava_knowledge_base WHERE id=%s AND customer_id=%s",
-            (kid, session["customer_id"])
-        )
+        cur.execute("DELETE FROM ava_knowledge_base WHERE id=%s AND customer_id=%s", (kid, session["customer_id"]))
     db.commit()
     return jsonify({"ok": True})
 
-@app.route("/customer/sessions", methods=["GET", "POST"])
-def customer_sessions():
-    if "customer_id" not in session:
-        return jsonify({"error": "Not logged in"}), 401
-    db = get_db()
-    with db.cursor() as cur:
-        cur.execute(
-            """SELECT s.id, s.session_type, s.started_at, COUNT(m.id) as message_count
-               FROM ava_sessions s LEFT JOIN ava_messages m ON s.id=m.session_id
-               WHERE s.customer_id=%s GROUP BY s.id, s.session_type, s.started_at
-               ORDER BY s.started_at DESC LIMIT 50""",
-            (session["customer_id"],)
-        )
-        rows = cur.fetchall()
-    return jsonify([dict(r) for r in rows])
-
-@app.route("/customer/me", methods=["GET", "POST"])
+@app.route("/customer/me")
 def customer_me():
     if "customer_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
@@ -616,10 +636,8 @@ def admin_login():
         data = request.get_json(silent=True) or {}
         db = get_db()
         with db.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM ava_admins WHERE email=%s AND password_hash=%s",
-                (data.get("email"), hash_pw(data.get("password", "")))
-            )
+            cur.execute("SELECT * FROM ava_admins WHERE email=%s AND password_hash=%s",
+                        (data.get("email"), hash_pw(data.get("password", ""))))
             a = cur.fetchone()
         if a:
             session["admin_id"] = a["id"]
@@ -648,37 +666,32 @@ def admin_customers():
         cid = str(uuid.uuid4())
         with db.cursor() as cur:
             cur.execute(
-                "INSERT INTO ava_customers (id, name, email, password_hash, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO ava_customers (id, name, email, password_hash, voice_id, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
                 (cid, data["name"], data["email"], hash_pw(data["password"]),
-                 (data.get("avatar_id") or LIVEAVATAR_AVATAR_ID or "").strip(),
-                 (data.get("elevenlabs_agent_id") or ELEVENLABS_AGENT_ID or "").strip(),
-                 (data.get("elevenlabs_secret_id") or "").strip(),
-                 datetime.utcnow().isoformat())
-            )
+                 (data.get("voice_id") or ELEVENLABS_VOICE_ID or "").strip(),
+                 datetime.utcnow().isoformat()))
         db.commit()
         return jsonify({"ok": True, "id": cid})
     db = get_db()
     with db.cursor() as cur:
-        cur.execute(
-            "SELECT id, name, email, avatar_id, elevenlabs_agent_id, elevenlabs_secret_id, active, created_at FROM ava_customers ORDER BY created_at DESC"
-        )
+        cur.execute("SELECT id, name, email, voice_id, active, created_at FROM ava_customers ORDER BY created_at DESC")
         rows = cur.fetchall()
     return jsonify([dict(c) for c in rows])
 
-@app.route("/admin/customer/<cid>/update", methods=["GET", "POST"])
+@app.route("/admin/customer/<cid>/update", methods=["POST"])
 def admin_update_customer(cid):
     if "admin_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
     data = request.get_json(silent=True) or {}
     db = get_db()
     with db.cursor() as cur:
-        for field in ["elevenlabs_secret_id", "elevenlabs_agent_id", "avatar_id"]:
-            if field in data and data[field]:
+        for field in ["voice_id"]:
+            if field in data and data[field] is not None:
                 cur.execute(f"UPDATE ava_customers SET {field}=%s WHERE id=%s", (data[field].strip(), cid))
     db.commit()
     return jsonify({"ok": True})
 
-@app.route("/admin/toggle_customer/<cid>", methods=["GET", "POST"])
+@app.route("/admin/toggle_customer/<cid>", methods=["POST"])
 def admin_toggle_customer(cid):
     if "admin_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
@@ -688,26 +701,25 @@ def admin_toggle_customer(cid):
     db.commit()
     return jsonify({"ok": True})
 
-@app.route("/admin/stats", methods=["GET", "POST"])
+@app.route("/admin/stats")
 def admin_stats():
     if "admin_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
     db = get_db()
+    stats = {}
     with db.cursor() as cur:
-        stats = {}
         for table, key in [
-            ("ava_customers",      "total_customers"),
-            ("ava_users",          "total_users"),
-            ("ava_sessions",       "total_sessions"),
-            ("ava_messages",       "total_messages"),
+            ("ava_customers", "total_customers"), ("ava_users", "total_users"),
+            ("ava_sessions", "total_sessions"), ("ava_messages", "total_messages"),
             ("ava_knowledge_base", "total_knowledge_chunks"),
-            ("ava_ego_revisions",  "total_ego_revisions")
+            ("ava_recordings", "total_recordings"),
+            ("ava_ego_revisions", "total_ego_revisions")
         ]:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
             stats[key] = cur.fetchone()["count"]
     return jsonify(stats)
 
-@app.route("/admin/customer/<cid>/ego", methods=["GET", "POST"])
+@app.route("/admin/customer/<cid>/ego")
 def admin_customer_ego(cid):
     if "admin_id" not in session:
         return jsonify({"error": "Not logged in"}), 401
@@ -730,5 +742,9 @@ def avatar_thumbnail():
         return send_file(local, mimetype="image/jpeg")
     return jsonify({"error": "No image"}), 404
 
+@app.route("/healthz")
+def healthz():
+    return jsonify({"ok": True})
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)), debug=True)

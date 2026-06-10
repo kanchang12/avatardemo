@@ -3,252 +3,200 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Avatar — TRIONE</title>
+<title>Train Your Twin</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;flex-direction:column}
-nav{display:flex;align-items:center;gap:14px;padding:13px 26px;border-bottom:1px solid #1e1e2e;flex-shrink:0}
-nav h1{color:#a78bfa;font-size:1.05rem;letter-spacing:2px;flex:1}
-.pill{font-size:0.78rem;color:#888;padding:4px 12px;border:1px solid #1e1e2e;border-radius:16px}
-nav a{color:#888;font-size:0.8rem;text-decoration:none;padding:5px 14px;border:1px solid #2e2e4e;border-radius:14px}
-nav a:hover{border-color:#a78bfa;color:#a78bfa}
-.layout{display:flex;flex:1;overflow:hidden;height:calc(100vh - 50px)}
-.vpanel{flex:1;background:#0f0f1a;position:relative;overflow:hidden}
-#avatarVideo{width:100%;height:100%;object-fit:cover;display:block}
-.lmsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#555;font-size:0.9rem;text-align:center;width:80%}
-.side{width:400px;border-left:1px solid #1e1e2e;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
-.status-section{padding:12px 16px;border-bottom:1px solid #1e1e2e;flex-shrink:0;display:flex;align-items:center;gap:8px}
-.sdot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0}
-.stext{font-size:0.8rem;color:#888;flex:1}
-.controls{padding:10px 14px;border-bottom:1px solid #1e1e2e;display:flex;gap:8px;flex-shrink:0}
-.ctrl-btn{flex:1;padding:9px;border:none;border-radius:9px;cursor:pointer;font-size:0.82rem;font-weight:600;transition:background 0.2s}
-.ctrl-btn.start{background:#a78bfa;color:#fff}
-.ctrl-btn.start:hover{background:#9061f9}
-.ctrl-btn.end{background:#ef4444;color:#fff}
-.ctrl-btn.end:hover{background:#dc2626}
-.ctrl-btn:disabled{background:#1e1e2e;color:#555;cursor:not-allowed}
-.tabs{display:flex;border-bottom:1px solid #1e1e2e;flex-shrink:0}
-.tab{flex:1;padding:11px;text-align:center;cursor:pointer;color:#888;font-size:0.78rem;border-bottom:2px solid transparent}
-.tab.active{color:#a78bfa;border-bottom-color:#a78bfa}
-.tab-content{display:none;flex:1;overflow-y:auto;padding:13px;flex-direction:column;gap:8px}
-.tab-content.active{display:flex}
-.chunk{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:9px;padding:11px;position:relative}
-.chunk .cat{font-size:0.68rem;text-transform:uppercase;margin-bottom:3px;letter-spacing:1px}
-.chunk .cat.ego{color:#f59e0b}.chunk .cat.raw{color:#a78bfa}
-.chunk .text{font-size:0.82rem;color:#ccc;line-height:1.5}
-.chunk .del{position:absolute;top:9px;right:9px;background:transparent;border:none;color:#555;cursor:pointer;font-size:0.78rem}
-.chunk .del:hover{color:#ef4444}
-.ego-section{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:11px;padding:13px;margin-bottom:8px}
-.ego-section h4{font-size:0.78rem;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
-.ego-section ul{list-style:none;display:flex;flex-direction:column;gap:4px}
-.ego-section ul li{font-size:0.8rem;color:#ccc;line-height:1.4;padding-left:12px;position:relative}
-.ego-section ul li:before{content:"•";position:absolute;left:0;color:#f59e0b}
-.persona-box{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:11px;padding:13px;font-size:0.83rem;color:#ccc;line-height:1.6;margin-bottom:8px}
-.stat-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.stat-chip{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:8px;padding:8px 12px;text-align:center;flex:1;min-width:60px}
-.stat-chip .n{font-size:1.4rem;color:#a78bfa;font-weight:700}
-.stat-chip .l{font-size:0.68rem;color:#555;margin-top:2px}
-.sitem{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:9px;padding:11px;display:flex;justify-content:space-between;align-items:center}
-.stype{font-size:0.73rem;color:#888;margin-bottom:2px}
-.sdate{font-size:0.7rem;color:#555}
-.scount{font-size:0.82rem;color:#a78bfa}
-.empty{color:#555;font-size:0.82rem;text-align:center;padding:24px 12px;line-height:1.6}
-.train-area{flex-shrink:0;padding:12px 14px;border-top:1px solid #1e1e2e;display:flex;gap:8px}
-.train-area textarea{flex:1;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:9px;color:#fff;padding:9px;font-size:0.82rem;resize:none;height:54px;font-family:inherit}
-.train-area textarea:focus{outline:none;border-color:#a78bfa}
-.train-area button{background:#a78bfa;color:#fff;border:none;border-radius:9px;padding:0 14px;cursor:pointer;font-size:0.82rem}
-.toast{position:fixed;bottom:22px;right:22px;background:#4ade80;color:#000;padding:9px 18px;border-radius:9px;font-size:0.82rem;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:999}
-.toast.show{opacity:1}
+:root{--bg:#0a0a0f;--panel:#0f0f1a;--line:#1e1e2e;--line2:#2e2e4e;--accent:#a78bfa;--accent2:#7c3aed;--green:#4ade80;--red:#ef4444;--muted:#8a8aa0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff;min-height:100vh}
+.nav{display:flex;align-items:center;gap:12px;padding:13px 24px;border-bottom:1px solid var(--line)}
+.nav h2{color:var(--accent);font-size:1rem;letter-spacing:2px}
+.nav .who{margin-left:auto;font-size:.82rem;color:var(--muted)}
+.nav a{color:var(--muted);font-size:.8rem;text-decoration:none;border:1px solid var(--line2);padding:6px 14px;border-radius:16px}
+.wrap{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;padding:22px;max-width:1200px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px}
+.panel h3{font-size:.95rem;margin-bottom:4px}
+.panel .desc{font-size:.8rem;color:var(--muted);margin-bottom:16px;line-height:1.6}
+video.cam{width:100%;border-radius:14px;background:#000;aspect-ratio:16/10;object-fit:cover;border:1px solid var(--line2)}
+.rowbtns{display:flex;gap:10px;margin:14px 0}
+.b{flex:1;padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:.9rem;font-weight:600}
+.b.start{background:var(--accent);color:#fff}.b.start:hover{background:var(--accent2)}
+.b.stop{background:var(--red);color:#fff}
+.b:disabled{background:var(--line2);color:#555;cursor:not-allowed}
+.recdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);margin-right:6px;animation:bl 1s infinite}
+@keyframes bl{50%{opacity:.3}}
+.status{font-size:.82rem;color:var(--muted);min-height:1.2em;margin-bottom:10px}
+label.lab{display:block;font-size:.78rem;color:var(--muted);margin:14px 0 5px}
+textarea{width:100%;min-height:120px;background:#15151f;border:1px solid var(--line2);border-radius:10px;
+  color:#fff;padding:12px;font-size:.92rem;font-family:inherit;resize:vertical;outline:none;line-height:1.6}
+textarea:focus{border-color:var(--accent)}
+.save{margin-top:12px;width:100%;padding:12px;background:var(--green);color:#06210f;border:none;border-radius:10px;
+  cursor:pointer;font-weight:700;font-size:.92rem}
+.save:disabled{background:var(--line2);color:#555}
+.statgrid{display:flex;gap:10px;margin-bottom:14px}
+.stat{flex:1;background:#15151f;border:1px solid var(--line2);border-radius:12px;padding:12px;text-align:center}
+.stat .n{font-size:1.5rem;color:var(--accent);font-weight:700}
+.stat .l{font-size:.72rem;color:var(--muted);margin-top:2px}
+.ego{font-size:.85rem;line-height:1.6;color:#d4d4e0;background:#15151f;border:1px solid var(--line2);
+  border-radius:12px;padding:14px;max-height:200px;overflow-y:auto;margin-bottom:12px}
+.reclist{display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto}
+.reci{display:flex;align-items:center;gap:10px;font-size:.8rem;color:#ccc;background:#15151f;border:1px solid var(--line2);
+  border-radius:10px;padding:8px 10px}
+.reci a{color:var(--accent);text-decoration:none;margin-left:auto}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#15151f;border:1px solid var(--green);
+  color:#fff;padding:11px 18px;border-radius:10px;font-size:.85rem;display:none;z-index:50}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<nav>
-  <h1>TRIONE — My Avatar</h1>
-  <div class="pill" id="kCount">Loading...</div>
-  <a href="/customer/logout">Sign out</a>
-</nav>
-<div class="layout">
-  <div class="vpanel">
-    <img id="avatarImg" src="/avatar/thumbnail" alt="Avatar" style="width:100%;height:100%;object-fit:cover;display:block;position:absolute;top:0;left:0">
-    <div class="lmsg" id="lmsg">Connecting...</div>
-    <video id="avatarVideo" autoplay playsinline style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0"></video>
+<div class="nav">
+  <h2>TRAIN YOUR TWIN</h2>
+  <span class="who" id="who"></span>
+  <a href="/customer/logout">Log out</a>
+</div>
+
+<div class="wrap">
+  <!-- LEFT: record + transcribe -->
+  <div class="panel">
+    <h3>Record &amp; speak</h3>
+    <p class="desc">Talk naturally about who you are — your beliefs, your story, the people who matter. The camera records you, and your words are transcribed live for your twin to learn.</p>
+    <video class="cam" id="cam" autoplay playsinline muted></video>
+    <div class="rowbtns">
+      <button class="b start" id="recBtn">● Start recording</button>
+      <button class="b stop" id="stopBtn" disabled>■ Stop</button>
+    </div>
+    <div class="status" id="recStatus"></div>
+
+    <label class="lab">What you said (edit if needed before saving to memory)</label>
+    <textarea id="transcript" placeholder="Your speech appears here. You can also type directly."></textarea>
+    <button class="save" id="saveBtn">Save to twin's memory</button>
   </div>
-  <div class="side">
-    <div class="status-section">
-      <div class="sdot" id="sDot"></div>
-      <span class="stext" id="sText">Connecting...</span>
+
+  <!-- RIGHT: ego + recordings -->
+  <div class="panel">
+    <h3>Your twin's mind</h3>
+    <p class="desc">Everything you teach builds the EGO — beliefs, values, relationships — that the twin uses to answer as you.</p>
+    <div class="statgrid">
+      <div class="stat"><div class="n" id="kc">0</div><div class="l">memories</div></div>
+      <div class="stat"><div class="n" id="rc">0</div><div class="l">recordings</div></div>
     </div>
-    <div class="controls">
-      <button class="ctrl-btn start" id="startBtn" onclick="startConversation()" disabled>🎙 Start</button>
-      <button class="ctrl-btn end"   id="endBtn"   onclick="endConversation()"   disabled>⏹ End</button>
-    </div>
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('ego',this)">EGO</div>
-      <div class="tab" onclick="switchTab('knowledge',this)">Knowledge</div>
-      <div class="tab" onclick="switchTab('sessions',this)">Sessions</div>
-    </div>
-    <div class="tab-content active" id="tab-ego"></div>
-    <div class="tab-content" id="tab-knowledge"></div>
-    <div class="tab-content" id="tab-sessions"></div>
-    <div class="train-area">
-      <textarea id="trainText" placeholder="Type to add knowledge manually..."></textarea>
-      <button onclick="trainManual()">Add</button>
-    </div>
+    <label class="lab">Persona summary</label>
+    <div class="ego" id="ego">Nothing learned yet. Record or type something to begin.</div>
+    <label class="lab">Recordings</label>
+    <div class="reclist" id="reclist"><span style="font-size:.8rem;color:var(--muted)">No recordings yet.</span></div>
   </div>
 </div>
+
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <script>
-let sessionId=null, customerId=null, room=null, livekitUrl=null, livekitToken=null;
+let sessionId=null, camStream=null, mediaRecorder=null, chunks=[], recording=false;
 
-async function init() {
-  setStatus('Connecting...','#f59e0b');
-  try {
-    const r=await fetch('/customer/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
+async function boot(){
+  const r=await fetch('/customer/session',{method:'POST'}); const d=await r.json();
+  if(d.error){ location.href='/customer/login'; return; }
+  sessionId=d.session_id;
+  document.getElementById('who').textContent=d.name;
+  document.getElementById('kc').textContent=d.knowledge_count||0;
+  if(d.persona) document.getElementById('ego').textContent=d.persona;
+  loadRecordings();
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    document.getElementById('cam').srcObject=camStream;
+  }catch(e){ document.getElementById('recStatus').textContent='Camera/mic blocked — allow access to record.'; }
+}
+boot();
+
+// ── MediaRecorder (open-source browser capture) ──
+document.getElementById('recBtn').onclick=()=>{
+  if(!camStream){ toast('No camera access.'); return; }
+  chunks=[];
+  const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')?'video/webm;codecs=vp9,opus':'video/webm';
+  mediaRecorder=new MediaRecorder(camStream,{mimeType:mime});
+  mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
+  mediaRecorder.onstop=uploadRecording;
+  mediaRecorder.start(1000); // chunk every second -> avoids memory overflow on long stories
+  recording=true;
+  document.getElementById('recBtn').disabled=true;
+  document.getElementById('stopBtn').disabled=false;
+  document.getElementById('recStatus').innerHTML='<span class="recdot"></span>Recording…';
+  startSpeech();
+};
+
+document.getElementById('stopBtn').onclick=()=>{
+  if(mediaRecorder&&recording){ mediaRecorder.stop(); recording=false; stopSpeech(); }
+  document.getElementById('recBtn').disabled=false;
+  document.getElementById('stopBtn').disabled=true;
+  document.getElementById('recStatus').textContent='Uploading recording…';
+};
+
+async function uploadRecording(){
+  const blob=new Blob(chunks,{type:'video/webm'});
+  const fd=new FormData();
+  fd.append('file',blob,'session.webm');
+  fd.append('session_id',sessionId);
+  fd.append('transcript',document.getElementById('transcript').value.trim());
+  try{
+    const r=await fetch('/customer/upload_recording',{method:'POST',body:fd});
     const d=await r.json();
-    if(!r.ok||d.error){setStatus('Error: '+(d.error||'Server error'),'#ef4444');return;}
-    sessionId=d.session_id;
-    customerId=d.customer_id;
-    livekitUrl=d.la_session.livekit_url;
-    livekitToken=d.la_session.livekit_client_token;
-    document.getElementById('kCount').textContent=d.knowledge_count+' chunks';
-    renderEgo(d.ego_model,d.persona);
-    loadKnowledge();
-    loadSessions();
-    setStatus('Ready','#4ade80');
-    document.getElementById('startBtn').disabled=false;
-    // auto-start
-    startConversation();
-  } catch(e){setStatus('Error: '+e.message,'#ef4444');console.error(e);}
+    document.getElementById('recStatus').textContent=d.ok?('Saved ('+Math.round(d.size_bytes/1024)+' KB).'):'Upload failed.';
+    loadRecordings();
+  }catch(e){ document.getElementById('recStatus').textContent='Upload error.'; }
 }
 
-async function startConversation() {
-  document.getElementById('startBtn').disabled=true;
-  setStatus('Connecting...','#f59e0b');
-  try {
-    room = new LivekitClient.Room({ adaptiveStream:true, dynacast:true });
-
-    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
-      if(track.kind === LivekitClient.Track.Kind.Video) {
-        const vid=document.getElementById('avatarVideo');
-        track.attach(vid);
-        vid.style.display='block';
-        document.getElementById('avatarImg').style.display='none';
-        document.getElementById('lmsg').style.display='none';
-        setStatus('Live','#4ade80');
-        document.getElementById('endBtn').disabled=false;
-      }
-      if(track.kind === LivekitClient.Track.Kind.Audio) {
-        track.attach();
-      }
-    });
-
-    room.on(LivekitClient.RoomEvent.DataReceived, (payload, participant, kind, topic) => {
-      try {
-        const msg=JSON.parse(new TextDecoder().decode(payload));
-        if(topic==='agent-response' && msg.event_type==='user.transcription' && msg.text) {
-          trainText(msg.text);
-        }
-      } catch(e){}
-    });
-
-    room.on(LivekitClient.RoomEvent.Disconnected, ()=>{
-      setStatus('Ended','#888');
-      document.getElementById('startBtn').disabled=false;
-      document.getElementById('endBtn').disabled=true;
-    });
-
-    await room.connect(livekitUrl, livekitToken);
-    await room.localParticipant.setMicrophoneEnabled(true);
-
-  } catch(e){
-    setStatus('Error: '+e.message,'#ef4444');
-    document.getElementById('startBtn').disabled=false;
-    console.error(e);
-  }
+// ── Web Speech transcription (browser) ──
+let recog=null;
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){
+  recog=new SR(); recog.continuous=true; recog.interimResults=true; recog.lang='en-US';
+  let base='';
+  recog.onstart=()=>{ base=document.getElementById('transcript').value; if(base&&!base.endsWith(' '))base+=' '; };
+  recog.onresult=e=>{
+    let fin='',interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) fin+=e.results[i][0].transcript+' '; else interim+=e.results[i][0].transcript;
+    }
+    if(fin) base+=fin;
+    document.getElementById('transcript').value=base+interim;
+  };
 }
+function startSpeech(){ if(recog){ try{recog.start();}catch(e){} } }
+function stopSpeech(){ if(recog){ try{recog.stop();}catch(e){} } }
 
-async function endConversation() {
-  if(room){await room.disconnect();room=null;}
-  document.getElementById('endBtn').disabled=true;
-  document.getElementById('startBtn').disabled=false;
-  setStatus('Ended','#888');
-}
-
-async function trainText(text) {
-  if(!text.trim()||!sessionId) return;
-  try {
+// ── Save to memory (Gemini EGO) ──
+document.getElementById('saveBtn').onclick=async ()=>{
+  const text=document.getElementById('transcript').value.trim();
+  if(text.length<5){ toast('Say a little more first.'); return; }
+  const btn=document.getElementById('saveBtn'); btn.disabled=true; btn.textContent='Learning…';
+  try{
     const r=await fetch('/customer/train',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text,session_id:sessionId,context:'voice conversation with own avatar'})});
+      body:JSON.stringify({text,session_id:sessionId,context:'training session'})});
     const d=await r.json();
-    if(d.chunks_added>0||d.beliefs_extracted>0)
-      showToast(`EGO updated: +${d.chunks_added} chunks, +${d.beliefs_extracted} beliefs`);
-  } catch(e){}
+    toast('Learned: +'+(d.chunks_added||0)+' memories, '+(d.beliefs_extracted||0)+' beliefs');
+    document.getElementById('transcript').value='';
+    refreshMind();
+  }catch(e){ toast('Save failed.'); }
+  btn.disabled=false; btn.textContent='Save to twin\'s memory';
+};
+
+async function refreshMind(){
+  const m=await (await fetch('/customer/me')).json();
+  if(m.persona) document.getElementById('ego').textContent=m.persona;
+  const k=await (await fetch('/customer/knowledge')).json();
+  document.getElementById('kc').textContent=Array.isArray(k)?k.length:0;
 }
 
-async function trainManual() {
-  const text=document.getElementById('trainText').value.trim();
-  if(!text) return;
-  document.getElementById('trainText').value='';
-  await trainText(text);
-  await loadKnowledge();
+async function loadRecordings(){
+  try{
+    const recs=await (await fetch('/customer/recordings')).json();
+    document.getElementById('rc').textContent=recs.length;
+    const box=document.getElementById('reclist');
+    if(!recs.length){ box.innerHTML='<span style="font-size:.8rem;color:var(--muted)">No recordings yet.</span>'; return; }
+    box.innerHTML=recs.map(r=>'<div class="reci">🎬 '+new Date(r.created_at).toLocaleString()+' · '+Math.round((r.size_bytes||0)/1024)+' KB <a href="/customer/recording/'+r.id+'" target="_blank">play</a></div>').join('');
+  }catch(e){}
 }
 
-async function loadKnowledge() {
-  const r=await fetch('/customer/knowledge');
-  const chunks=await r.json();
-  document.getElementById('kCount').textContent=chunks.length+' chunks';
-  const el=document.getElementById('tab-knowledge');
-  if(!chunks.length){el.innerHTML='<p class="empty">Talk to your avatar — everything you share builds your knowledge base.</p>';return;}
-  el.innerHTML=chunks.map(c=>`<div class="chunk"><div class="cat ${c.ego_layer==='ego'?'ego':'raw'}">${c.ego_layer==='ego'?'⚡ EGO':'📝 RAW'} · ${c.category}</div><div class="text">${c.chunk}</div><button class="del" onclick="delChunk(${c.id},this)">✕</button></div>`).join('');
-}
-
-async function loadEgo() {
-  const r=await fetch('/customer/ego');
-  const d=await r.json();
-  renderEgo(d.ego,d.summary);
-}
-
-function renderEgo(ego,persona) {
-  const el=document.getElementById('tab-ego');
-  if(!ego&&!persona){el.innerHTML='<p class="empty">Your EGO model will be built here as you talk to your avatar.<br><br>Every conversation teaches it who you are.</p>';return;}
-  let html='';
-  if(persona) html+=`<div class="persona-box">${persona}</div>`;
-  const bCount=(ego?.beliefs||[]).length,vCount=(ego?.values||[]).length;
-  const rCount=Object.keys(ego?.relationships||{}).length,pCount=(ego?.reasoning_patterns||[]).length;
-  html+=`<div class="stat-row"><div class="stat-chip"><div class="n">${bCount}</div><div class="l">Beliefs</div></div><div class="stat-chip"><div class="n">${vCount}</div><div class="l">Values</div></div><div class="stat-chip"><div class="n">${rCount}</div><div class="l">Relations</div></div><div class="stat-chip"><div class="n">${pCount}</div><div class="l">Patterns</div></div></div>`;
-  if(ego?.beliefs?.length) html+=`<div class="ego-section"><h4>Core Beliefs</h4><ul>${ego.beliefs.slice(0,8).map(b=>`<li>${b}</li>`).join('')}</ul></div>`;
-  if(ego?.values?.length) html+=`<div class="ego-section"><h4>Values</h4><ul>${ego.values.slice(0,6).map(v=>`<li>${v}</li>`).join('')}</ul></div>`;
-  if(ego?.reasoning_patterns?.length) html+=`<div class="ego-section"><h4>How They Think</h4><ul>${ego.reasoning_patterns.slice(0,5).map(p=>`<li>${p}</li>`).join('')}</ul></div>`;
-  if(ego?.relationships&&Object.keys(ego.relationships).length) html+=`<div class="ego-section"><h4>Relationships</h4>${Object.entries(ego.relationships).slice(0,8).map(([p,d])=>`<div style="font-size:0.78rem;color:#ccc;margin-bottom:4px"><strong style="color:#a78bfa">${p}:</strong> ${d}</div>`).join('')}</div>`;
-  if(ego?.contradictions?.length) html+=`<div class="ego-section"><h4>Growth & Contradictions</h4><ul>${ego.contradictions.slice(0,4).map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
-  el.innerHTML=html;
-}
-
-async function loadSessions() {
-  const r=await fetch('/customer/sessions');
-  const sessions=await r.json();
-  const el=document.getElementById('tab-sessions');
-  if(!sessions.length){el.innerHTML='<p class="empty">No sessions yet.</p>';return;}
-  el.innerHTML=sessions.map(s=>`<div class="sitem"><div><div class="stype">${s.session_type==='customer_training'?'🎓 Training':'💬 User chat'}</div><div class="sdate">${s.started_at?s.started_at.slice(0,16):''}</div></div><div class="scount">${s.message_count} msgs</div></div>`).join('');
-}
-
-async function delChunk(id,btn){await fetch(`/customer/knowledge/${id}`,{method:'DELETE'});btn.closest('.chunk').remove();}
-
-function switchTab(name,el){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('tab-'+name).classList.add('active');
-  if(name==='ego') loadEgo();
-}
-
-function setStatus(text,color){document.getElementById('sText').textContent=text;document.getElementById('sDot').style.background=color;}
-function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);}
-
-setInterval(()=>{if(sessionId) loadKnowledge();},30000);
-init();
+function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.style.display='block';
+  setTimeout(()=>el.style.display='none',2600); }
 </script>
 </body>
 </html>

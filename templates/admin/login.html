@@ -1,41 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TRIONE Admin</title>
-<style>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Admin Login</title><style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.box{background:#0f0f1a;border:1px solid #1e1e2e;border-radius:20px;padding:48px;width:380px}
-h1{color:#a78bfa;font-size:1.4rem;margin-bottom:6px;letter-spacing:2px}
-p{color:#888;font-size:0.85rem;margin-bottom:28px}
-.field{margin-bottom:16px}
-.field label{display:block;font-size:0.8rem;color:#888;margin-bottom:5px}
-.field input{width:100%;padding:11px 14px;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:9px;color:#fff;font-size:0.9rem}
-.field input:focus{outline:none;border-color:#a78bfa}
-.btn{width:100%;padding:13px;background:#a78bfa;color:#fff;border:none;border-radius:9px;font-size:0.95rem;cursor:pointer;margin-top:6px}
-.btn:hover{background:#7c3aed}
-.err{color:#ef4444;font-size:0.82rem;margin-top:10px;display:none}
-</style>
-</head>
-<body>
+body{font-family:'Segoe UI',system-ui,sans-serif;background:radial-gradient(ellipse at center,#1a1a2e,#0a0a0f 70%);color:#fff;
+min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:22px;padding:34px;width:320px}
+h1{color:#a78bfa;font-size:1.3rem;letter-spacing:2px;text-align:center;margin-bottom:24px}
+label{display:block;font-size:.78rem;color:#8a8aa0;margin:12px 0 5px}
+input{width:100%;padding:11px 13px;background:#15151f;border:1px solid #2e2e4e;border-radius:10px;color:#fff;outline:none;font-size:.95rem}
+input:focus{border-color:#a78bfa}
+button{width:100%;margin-top:20px;padding:12px;background:#a78bfa;color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:600}
+button:hover{background:#7c3aed}
+.err{color:#f87171;font-size:.82rem;text-align:center;margin-top:12px;min-height:1em}
+</style></head><body>
 <div class="box">
-  <h1>TRIONE</h1>
-  <p>Administration panel</p>
-  <div class="field"><label>Email</label><input type="email" id="email" placeholder="admin@example.com"></div>
-  <div class="field"><label>Password</label><input type="password" id="pw" placeholder="••••••••"></div>
-  <button class="btn" onclick="login()">Sign in</button>
-  <p class="err" id="err">Invalid credentials</p>
+<h1>ADMIN</h1>
+<label>Email</label><input id="email" type="email">
+<label>Password</label><input id="pw" type="password" onkeydown="if(event.key==='Enter')login()">
+<button onclick="login()">Sign in</button>
+<p class="err" id="err"></p>
 </div>
 <script>
 async function login(){
   const r=await fetch('/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({email:document.getElementById('email').value,password:document.getElementById('pw').value})});
-  if(r.ok)window.location='/admin/';
-  else document.getElementById('err').style.display='block';
+    body:JSON.stringify({email:document.getElementById('email').value.trim(),password:document.getElementById('pw').value})});
+  const d=await r.json();
+  if(d.ok) location.href='/admin/'; else document.getElementById('err').textContent=d.error||'Login failed';
 }
-document.addEventListener('keydown',e=>{if(e.key==='Enter')login();});
-</script>
-</body>
-</html>
+</script></body></html>

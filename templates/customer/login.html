@@ -1,57 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sign In — TRIONE</title>
-<style>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Avatar Login</title><style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.card{width:360px;background:#0f0f1a;border:1px solid #1e1e2e;border-radius:16px;padding:36px 32px}
-.logo{color:#a78bfa;font-size:1.1rem;letter-spacing:3px;text-align:center;margin-bottom:8px}
-.sub{color:#555;font-size:0.78rem;text-align:center;margin-bottom:28px}
-label{display:block;font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
-input{width:100%;background:#0a0a0f;border:1px solid #2e2e4e;border-radius:9px;color:#fff;padding:11px 14px;font-size:0.88rem;outline:none;margin-bottom:18px;font-family:inherit}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:radial-gradient(ellipse at center,#1a1a2e,#0a0a0f 70%);color:#fff;
+min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{background:#0f0f1a;border:1px solid #2e2e4e;border-radius:22px;padding:34px;width:340px}
+h1{color:#a78bfa;font-size:1.4rem;letter-spacing:2px;text-align:center;margin-bottom:6px}
+.sub{color:#8a8aa0;font-size:.85rem;text-align:center;margin-bottom:24px}
+label{display:block;font-size:.78rem;color:#8a8aa0;margin:12px 0 5px}
+input{width:100%;padding:11px 13px;background:#15151f;border:1px solid #2e2e4e;border-radius:10px;color:#fff;outline:none;font-size:.95rem}
 input:focus{border-color:#a78bfa}
-button{width:100%;background:#a78bfa;color:#fff;border:none;border-radius:9px;padding:12px;font-size:0.9rem;cursor:pointer;font-weight:600;letter-spacing:0.5px}
-button:hover{background:#9061f9}
-.err{color:#ef4444;font-size:0.8rem;text-align:center;margin-top:14px;min-height:20px}
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="logo">TRIONE</div>
-  <div class="sub">Digital Twin Platform</div>
-  <label>Email</label>
-  <input type="email" id="email" placeholder="you@example.com" autocomplete="username">
-  <label>Password</label>
-  <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
-  <button onclick="login()">Sign In</button>
-  <div class="err" id="err"></div>
+button{width:100%;margin-top:20px;padding:12px;background:#a78bfa;color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-size:.95rem}
+button:hover{background:#7c3aed}
+.err{color:#f87171;font-size:.82rem;text-align:center;margin-top:12px;min-height:1em}
+</style></head><body>
+<div class="box">
+<h1>TRAIN YOUR TWIN</h1><p class="sub">Sign in to teach your digital twin</p>
+<label>Email</label><input id="email" type="email">
+<label>Password</label><input id="pw" type="password" onkeydown="if(event.key==='Enter')login()">
+<button onclick="login()">Sign in</button>
+<p class="err" id="err"></p>
 </div>
 <script>
-async function login() {
-  const email    = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  const errEl    = document.getElementById('err');
-  errEl.textContent = '';
-  if (!email || !password) { errEl.textContent = 'Please enter email and password.'; return; }
-  try {
-    const r = await fetch('/customer/login', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, password})
-    });
-    const d = await r.json();
-    if (d.ok) {
-      window.location.href = '/customer/';
-    } else {
-      errEl.textContent = d.error || 'Login failed.';
-    }
-  } catch (e) {
-    errEl.textContent = 'Network error. Please try again.';
-  }
+async function login(){
+  const r=await fetch('/customer/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:document.getElementById('email').value.trim(),password:document.getElementById('pw').value})});
+  const d=await r.json();
+  if(d.ok) location.href='/customer/'; else document.getElementById('err').textContent=d.error||'Login failed';
 }
-</script>
-</body>
-</html>
+</script></body></html>
