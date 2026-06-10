@@ -6,197 +6,211 @@
 <title>Train Your Twin</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0a0f;--panel:#0f0f1a;--line:#1e1e2e;--line2:#2e2e4e;--accent:#a78bfa;--accent2:#7c3aed;--green:#4ade80;--red:#ef4444;--muted:#8a8aa0}
+:root{--bg:#0a0a0f;--panel:#0f0f1a;--line:#1e1e2e;--line2:#2e2e4e;--accent:#a78bfa;--accent2:#7c3aed;--green:#4ade80;--red:#f87171;--muted:#8a8aa0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff;min-height:100vh}
 .nav{display:flex;align-items:center;gap:12px;padding:13px 24px;border-bottom:1px solid var(--line)}
 .nav h2{color:var(--accent);font-size:1rem;letter-spacing:2px}
 .nav .who{margin-left:auto;font-size:.82rem;color:var(--muted)}
 .nav a{color:var(--muted);font-size:.8rem;text-decoration:none;border:1px solid var(--line2);padding:6px 14px;border-radius:16px}
-.wrap{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;padding:22px;max-width:1200px;margin:0 auto}
+.wrap{display:grid;grid-template-columns:1.25fr 1fr;gap:20px;padding:22px;max-width:1180px;margin:0 auto}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px}
 .panel h3{font-size:.95rem;margin-bottom:4px}
 .panel .desc{font-size:.8rem;color:var(--muted);margin-bottom:16px;line-height:1.6}
-video.cam{width:100%;border-radius:14px;background:#000;aspect-ratio:16/10;object-fit:cover;border:1px solid var(--line2)}
-.rowbtns{display:flex;gap:10px;margin:14px 0}
-.b{flex:1;padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:.9rem;font-weight:600}
+.camrow{display:flex;gap:14px;align-items:flex-start}
+video.cam{width:55%;border-radius:14px;background:#000;aspect-ratio:4/3;object-fit:cover;border:1px solid var(--line2)}
+video.cam.talking{border-color:var(--green);box-shadow:0 0 26px rgba(74,222,128,.35)}
+.qbox{flex:1;background:#15151f;border:1px solid var(--line2);border-radius:14px;padding:14px;min-height:120px}
+.qbox .lbl{font-size:.72rem;color:var(--green);font-weight:600;margin-bottom:6px}
+.qbox .q{font-size:1rem;line-height:1.5;color:#eaeaf5}
+.rowbtns{display:flex;gap:10px;margin:16px 0 8px}
+.b{flex:1;padding:13px;border:none;border-radius:10px;cursor:pointer;font-size:.92rem;font-weight:600}
 .b.start{background:var(--accent);color:#fff}.b.start:hover{background:var(--accent2)}
 .b.stop{background:var(--red);color:#fff}
 .b:disabled{background:var(--line2);color:#555;cursor:not-allowed}
 .recdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);margin-right:6px;animation:bl 1s infinite}
 @keyframes bl{50%{opacity:.3}}
-.status{font-size:.82rem;color:var(--muted);min-height:1.2em;margin-bottom:10px}
+.status{font-size:.82rem;color:var(--muted);min-height:1.2em;margin:6px 0}
+.status.listen{color:var(--green)}
+.voicewarn{font-size:.74rem;color:#fca5a5;background:#2a1010;border:1px solid var(--red);border-radius:9px;padding:7px 11px;margin-bottom:10px;display:none}
 label.lab{display:block;font-size:.78rem;color:var(--muted);margin:14px 0 5px}
-textarea{width:100%;min-height:120px;background:#15151f;border:1px solid var(--line2);border-radius:10px;
-  color:#fff;padding:12px;font-size:.92rem;font-family:inherit;resize:vertical;outline:none;line-height:1.6}
+textarea{width:100%;min-height:80px;background:#15151f;border:1px solid var(--line2);border-radius:10px;color:#fff;padding:12px;font-size:.92rem;font-family:inherit;resize:vertical;outline:none;line-height:1.6}
 textarea:focus{border-color:var(--accent)}
-.save{margin-top:12px;width:100%;padding:12px;background:var(--green);color:#06210f;border:none;border-radius:10px;
-  cursor:pointer;font-weight:700;font-size:.92rem}
-.save:disabled{background:var(--line2);color:#555}
+.send{margin-top:10px;width:100%;padding:11px;background:var(--green);color:#06210f;border:none;border-radius:10px;cursor:pointer;font-weight:700;font-size:.9rem}
+.send:disabled{background:var(--line2);color:#555}
+.convo{max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;margin-top:14px}
+.cm{font-size:.86rem;line-height:1.5}.cm .w{font-size:.7rem;font-weight:600;margin-bottom:2px}
+.cm.twin .w{color:var(--green)}.cm.you .w{color:var(--accent)}.cm .t{color:#d4d4e0}
 .statgrid{display:flex;gap:10px;margin-bottom:14px}
 .stat{flex:1;background:#15151f;border:1px solid var(--line2);border-radius:12px;padding:12px;text-align:center}
-.stat .n{font-size:1.5rem;color:var(--accent);font-weight:700}
-.stat .l{font-size:.72rem;color:var(--muted);margin-top:2px}
-.ego{font-size:.85rem;line-height:1.6;color:#d4d4e0;background:#15151f;border:1px solid var(--line2);
-  border-radius:12px;padding:14px;max-height:200px;overflow-y:auto;margin-bottom:12px}
-.reclist{display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto}
-.reci{display:flex;align-items:center;gap:10px;font-size:.8rem;color:#ccc;background:#15151f;border:1px solid var(--line2);
-  border-radius:10px;padding:8px 10px}
+.stat .n{font-size:1.5rem;color:var(--accent);font-weight:700}.stat .l{font-size:.72rem;color:var(--muted);margin-top:2px}
+.ego{font-size:.85rem;line-height:1.6;color:#d4d4e0;background:#15151f;border:1px solid var(--line2);border-radius:12px;padding:14px;max-height:200px;overflow-y:auto;margin-bottom:12px}
+.reclist{display:flex;flex-direction:column;gap:8px;max-height:170px;overflow-y:auto}
+.reci{display:flex;align-items:center;gap:10px;font-size:.8rem;color:#ccc;background:#15151f;border:1px solid var(--line2);border-radius:10px;padding:8px 10px}
 .reci a{color:var(--accent);text-decoration:none;margin-left:auto}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#15151f;border:1px solid var(--green);
-  color:#fff;padding:11px 18px;border-radius:10px;font-size:.85rem;display:none;z-index:50}
-@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#15151f;border:1px solid var(--green);color:#fff;padding:11px 18px;border-radius:10px;font-size:.85rem;display:none;z-index:50}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}.camrow{flex-direction:column}video.cam{width:100%}}
 </style>
 </head>
 <body>
-<div class="nav">
-  <h2>TRAIN YOUR TWIN</h2>
-  <span class="who" id="who"></span>
-  <a href="/customer/logout">Log out</a>
-</div>
+<div class="nav"><h2>TRAIN YOUR TWIN</h2><span class="who" id="who"></span><a href="/customer/logout">Log out</a></div>
 
 <div class="wrap">
-  <!-- LEFT: record + transcribe -->
   <div class="panel">
-    <h3>Record &amp; speak</h3>
-    <p class="desc">Talk naturally about who you are — your beliefs, your story, the people who matter. The camera records you, and your words are transcribed live for your twin to learn.</p>
-    <video class="cam" id="cam" autoplay playsinline muted></video>
-    <div class="rowbtns">
-      <button class="b start" id="recBtn">● Start recording</button>
-      <button class="b stop" id="stopBtn" disabled>■ Stop</button>
+    <h3>Your twin is interviewing you</h3>
+    <p class="desc">Press start. Your twin asks you questions out loud — you answer by speaking. It listens, learns, and keeps the conversation going. The whole session is recorded.</p>
+    <div class="voicewarn" id="voicewarn"></div>
+    <div class="camrow">
+      <video class="cam" id="cam" autoplay playsinline muted></video>
+      <div class="qbox"><div class="lbl">YOUR TWIN ASKS</div><div class="q" id="question">Press “Start conversation” and your twin will greet you.</div></div>
     </div>
-    <div class="status" id="recStatus"></div>
+    <div class="rowbtns">
+      <button class="b start" id="startBtn">● Start conversation</button>
+      <button class="b stop" id="endBtn" disabled>■ End &amp; save</button>
+    </div>
+    <div class="status" id="status"></div>
 
-    <label class="lab">What you said (edit if needed before saving to memory)</label>
-    <textarea id="transcript" placeholder="Your speech appears here. You can also type directly."></textarea>
-    <button class="save" id="saveBtn">Save to twin's memory</button>
+    <label class="lab">Your answer (auto-filled as you speak — edit, or type instead)</label>
+    <textarea id="answer" placeholder="Speak, or type your answer here…"></textarea>
+    <button class="send" id="sendBtn">Send answer →</button>
+
+    <div class="convo" id="convo"></div>
   </div>
 
-  <!-- RIGHT: ego + recordings -->
   <div class="panel">
     <h3>Your twin's mind</h3>
-    <p class="desc">Everything you teach builds the EGO — beliefs, values, relationships — that the twin uses to answer as you.</p>
+    <p class="desc">Everything you tell it builds the EGO — beliefs, values, relationships — that the twin uses to answer as you.</p>
     <div class="statgrid">
       <div class="stat"><div class="n" id="kc">0</div><div class="l">memories</div></div>
       <div class="stat"><div class="n" id="rc">0</div><div class="l">recordings</div></div>
     </div>
     <label class="lab">Persona summary</label>
-    <div class="ego" id="ego">Nothing learned yet. Record or type something to begin.</div>
+    <div class="ego" id="ego">Nothing learned yet. Start the conversation to begin.</div>
     <label class="lab">Recordings</label>
     <div class="reclist" id="reclist"><span style="font-size:.8rem;color:var(--muted)">No recordings yet.</span></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
+<audio id="player"></audio>
 
 <script>
-let sessionId=null, camStream=null, mediaRecorder=null, chunks=[], recording=false;
+let sessionId=null, camStream=null, mediaRecorder=null, chunks=[], active=false, busy=false;
 
 async function boot(){
-  const r=await fetch('/customer/session',{method:'POST'}); const d=await r.json();
+  const d=await (await fetch('/customer/session',{method:'POST'})).json();
   if(d.error){ location.href='/customer/login'; return; }
   sessionId=d.session_id;
   document.getElementById('who').textContent=d.name;
   document.getElementById('kc').textContent=d.knowledge_count||0;
   if(d.persona) document.getElementById('ego').textContent=d.persona;
+  showVoiceWarn(d.voice_error);
+  window._opening=d.opening; window._openingAudio=d.opening_audio;
   loadRecordings();
-  try{
-    camStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-    document.getElementById('cam').srcObject=camStream;
-  }catch(e){ document.getElementById('recStatus').textContent='Camera/mic blocked — allow access to record.'; }
+  try{ camStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    document.getElementById('cam').srcObject=camStream; }
+  catch(e){ setStatus('Camera/mic blocked — allow access to record.'); }
 }
 boot();
 
-// ── MediaRecorder (open-source browser capture) ──
-document.getElementById('recBtn').onclick=()=>{
+function showVoiceWarn(err){ if(!err) return; const w=document.getElementById('voicewarn');
+  w.textContent='Cloned voice not active ('+err+') — twin is using a temporary browser voice. Set a real ElevenLabs voice ID to fix.'; w.style.display='block'; }
+function setStatus(t,listen){ const s=document.getElementById('status'); s.textContent=t; s.className='status'+(listen?' listen':''); }
+function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.style.display='block'; setTimeout(()=>el.style.display='none',2600); }
+
+/* ── twin speaks (ElevenLabs, else browser), then listens ── */
+function twinSpeak(b64,text,then){
+  const cam=document.getElementById('cam'); cam.classList.add('talking');
+  document.getElementById('question').textContent=text;
+  const done=()=>{ cam.classList.remove('talking'); then&&then(); };
+  if(b64){ const p=document.getElementById('player'); p.src='data:audio/mpeg;base64,'+b64;
+    p.onended=done; p.onerror=()=>browserSpeak(text,done); p.play().catch(()=>browserSpeak(text,done)); }
+  else browserSpeak(text,done);
+}
+function browserSpeak(text,done){ if(!('speechSynthesis' in window)){ done(); return; }
+  const u=new SpeechSynthesisUtterance(text); u.onend=done; u.onerror=done;
+  window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }
+
+/* ── start / end the recorded session ── */
+document.getElementById('startBtn').onclick=()=>{
   if(!camStream){ toast('No camera access.'); return; }
   chunks=[];
   const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')?'video/webm;codecs=vp9,opus':'video/webm';
   mediaRecorder=new MediaRecorder(camStream,{mimeType:mime});
   mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) chunks.push(e.data); };
   mediaRecorder.onstop=uploadRecording;
-  mediaRecorder.start(1000); // chunk every second -> avoids memory overflow on long stories
-  recording=true;
-  document.getElementById('recBtn').disabled=true;
-  document.getElementById('stopBtn').disabled=false;
-  document.getElementById('recStatus').innerHTML='<span class="recdot"></span>Recording…';
-  startSpeech();
+  mediaRecorder.start(1000);
+  active=true;
+  document.getElementById('startBtn').disabled=true;
+  document.getElementById('endBtn').disabled=false;
+  setStatus('Recording… your twin is speaking.');
+  addConvo('twin',window._opening);
+  twinSpeak(window._openingAudio, window._opening, listen);
 };
-
-document.getElementById('stopBtn').onclick=()=>{
-  if(mediaRecorder&&recording){ mediaRecorder.stop(); recording=false; stopSpeech(); }
-  document.getElementById('recBtn').disabled=false;
-  document.getElementById('stopBtn').disabled=true;
-  document.getElementById('recStatus').textContent='Uploading recording…';
+document.getElementById('endBtn').onclick=()=>{
+  active=false; stopListen();
+  if(mediaRecorder&&mediaRecorder.state!=='inactive') mediaRecorder.stop();
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('endBtn').disabled=true;
+  setStatus('Saving recording…');
 };
 
 async function uploadRecording(){
   const blob=new Blob(chunks,{type:'video/webm'});
-  const fd=new FormData();
-  fd.append('file',blob,'session.webm');
-  fd.append('session_id',sessionId);
-  fd.append('transcript',document.getElementById('transcript').value.trim());
-  try{
-    const r=await fetch('/customer/upload_recording',{method:'POST',body:fd});
-    const d=await r.json();
-    document.getElementById('recStatus').textContent=d.ok?('Saved ('+Math.round(d.size_bytes/1024)+' KB).'):'Upload failed.';
-    loadRecordings();
-  }catch(e){ document.getElementById('recStatus').textContent='Upload error.'; }
+  const fd=new FormData(); fd.append('file',blob,'session.webm'); fd.append('session_id',sessionId);
+  try{ const d=await (await fetch('/customer/upload_recording',{method:'POST',body:fd})).json();
+    setStatus(d.ok?('Saved ('+Math.round(d.size_bytes/1024)+' KB).'):'Upload failed.'); loadRecordings(); }
+  catch(e){ setStatus('Upload error.'); }
 }
 
-// ── Web Speech transcription (browser) ──
-let recog=null;
+/* ── speech recognition for Petar's answers ── */
+let recog=null, listening=false;
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(SR){
   recog=new SR(); recog.continuous=true; recog.interimResults=true; recog.lang='en-US';
   let base='';
-  recog.onstart=()=>{ base=document.getElementById('transcript').value; if(base&&!base.endsWith(' '))base+=' '; };
-  recog.onresult=e=>{
-    let fin='',interim='';
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal) fin+=e.results[i][0].transcript+' '; else interim+=e.results[i][0].transcript;
-    }
-    if(fin) base+=fin;
-    document.getElementById('transcript').value=base+interim;
-  };
+  recog.onstart=()=>{ base=document.getElementById('answer').value; if(base&&!base.endsWith(' '))base+=' '; setStatus('Listening… speak your answer, then press “Send answer”.',true); };
+  recog.onresult=e=>{ let fin='',interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){ if(e.results[i].isFinal) fin+=e.results[i][0].transcript+' '; else interim+=e.results[i][0].transcript; }
+    if(fin) base+=fin; document.getElementById('answer').value=base+interim; };
+  recog.onerror=()=>{};
 }
-function startSpeech(){ if(recog){ try{recog.start();}catch(e){} } }
-function stopSpeech(){ if(recog){ try{recog.stop();}catch(e){} } }
+function listen(){ if(!recog||listening||!active) return; try{ listening=true; recog.start(); }catch(e){ listening=false; } }
+function stopListen(){ if(recog&&listening){ try{recog.stop();}catch(e){} } listening=false; }
 
-// ── Save to memory (Gemini EGO) ──
-document.getElementById('saveBtn').onclick=async ()=>{
-  const text=document.getElementById('transcript').value.trim();
-  if(text.length<5){ toast('Say a little more first.'); return; }
-  const btn=document.getElementById('saveBtn'); btn.disabled=true; btn.textContent='Learning…';
+/* ── send answer -> learn -> twin asks next ── */
+document.getElementById('sendBtn').onclick=sendAnswer;
+async function sendAnswer(){
+  if(busy) return;
+  const text=document.getElementById('answer').value.trim();
+  if(text.length<3){ toast('Say a little more first.'); return; }
+  busy=true; stopListen();
+  const btn=document.getElementById('sendBtn'); btn.disabled=true; btn.textContent='Learning…';
+  addConvo('you',text);
   try{
-    const r=await fetch('/customer/train',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text,session_id:sessionId,context:'training session'})});
-    const d=await r.json();
-    toast('Learned: +'+(d.chunks_added||0)+' memories, '+(d.beliefs_extracted||0)+' beliefs');
-    document.getElementById('transcript').value='';
-    refreshMind();
+    const d=await (await fetch('/customer/train',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text,session_id:sessionId,context:'interview'})})).json();
+    document.getElementById('answer').value='';
+    if(typeof d.knowledge_count!=='undefined') document.getElementById('kc').textContent=d.knowledge_count;
+    if(d.persona) document.getElementById('ego').textContent=d.persona;
+    showVoiceWarn(d.voice_error);
+    if(d.reply){ addConvo('twin',d.reply); twinSpeak(d.audio,d.reply, ()=>{ if(active) listen(); }); }
   }catch(e){ toast('Save failed.'); }
-  btn.disabled=false; btn.textContent='Save to twin\'s memory';
-};
-
-async function refreshMind(){
-  const m=await (await fetch('/customer/me')).json();
-  if(m.persona) document.getElementById('ego').textContent=m.persona;
-  const k=await (await fetch('/customer/knowledge')).json();
-  document.getElementById('kc').textContent=Array.isArray(k)?k.length:0;
+  busy=false; btn.disabled=false; btn.textContent='Send answer →';
 }
+
+function addConvo(role,text){ const box=document.getElementById('convo');
+  const el=document.createElement('div'); el.className='cm '+role;
+  el.innerHTML='<div class="w">'+(role==='twin'?'Twin':'You')+'</div><div class="t"></div>';
+  el.querySelector('.t').textContent=text; box.appendChild(el); box.scrollTop=box.scrollHeight; }
 
 async function loadRecordings(){
-  try{
-    const recs=await (await fetch('/customer/recordings')).json();
+  try{ const recs=await (await fetch('/customer/recordings')).json();
     document.getElementById('rc').textContent=recs.length;
     const box=document.getElementById('reclist');
     if(!recs.length){ box.innerHTML='<span style="font-size:.8rem;color:var(--muted)">No recordings yet.</span>'; return; }
     box.innerHTML=recs.map(r=>'<div class="reci">🎬 '+new Date(r.created_at).toLocaleString()+' · '+Math.round((r.size_bytes||0)/1024)+' KB <a href="/customer/recording/'+r.id+'" target="_blank">play</a></div>').join('');
   }catch(e){}
 }
-
-function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.style.display='block';
-  setTimeout(()=>el.style.display='none',2600); }
 </script>
 </body>
 </html>

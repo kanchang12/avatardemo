@@ -166,6 +166,30 @@ Keep replies natural, spoken-length (1-4 sentences unless asked for more).
 Reply now, in first person, as yourself:"""
     return gemini(prompt, system) or "I'm here. Tell me what's on your mind."
 
+def gemini_interview_question(persona_context, history, last_answer):
+    """The twin acts as a warm interviewer drawing out the person's life and identity."""
+    convo = "\n".join(f"{m['speaker']}: {m['text']}" for m in history[-10:])
+    system = """You are a warm, curious interviewer helping a person build their digital twin.
+Your goal is to draw out who they are — beliefs, memories, relationships, values, turning points.
+Speak in first person to them, like a close friend who really wants to understand.
+Ask ONE short, specific follow-up question at a time (1-2 sentences). React briefly to what
+they just said, then ask the next question that goes deeper. Never list questions. Be spoken and natural."""
+    prompt = f"""What they've told you so far:
+{persona_context if persona_context else "(nothing yet)"}
+
+Recent exchange:
+{convo}
+
+They just said: "{last_answer}"
+
+Respond warmly in 1-2 sentences and ask your next single question:"""
+    return gemini(prompt, system) or "Thank you for sharing that. Tell me more about a moment that shaped who you are."
+
+def gemini_interview_opening(persona_context):
+    system = "You are a warm interviewer starting a session to build someone's digital twin. Greet them in one or two friendly spoken sentences and ask an easy opening question to get them talking about themselves."
+    prompt = f"What you already know about them:\n{persona_context or '(nothing yet — this is the first session)'}\n\nGive your spoken opening now:"
+    return gemini(prompt, system) or "Hi — good to see you. Let's pick up where we left off. Tell me, what's been on your mind today?"
+
 def parse_json(text):
     text = (text or "").strip()
     if text.startswith("```"):
@@ -263,8 +287,10 @@ def update_ego_model(customer_id, new_ego_data, trigger_text):
                     (customer_id, ego_json, trigger_text[:500], datetime.utcnow().isoformat())
                 )
             db.commit()
+            return summary
     except Exception as e:
         print(f"EGO update error: {e}")
+    return ""
 
 def get_ego_context(db, customer_id):
     with db.cursor() as cur:
@@ -401,12 +427,23 @@ def user_session():
             "INSERT INTO ava_sessions (id, customer_id, user_id, session_type, started_at) VALUES (%s,%s,%s,%s,%s)",
             (session_id, customer["id"], session["user_id"], "user_chat", datetime.utcnow().isoformat())
         )
+    # spoken greeting in the avatar's voice
+    with db.cursor() as cur:
+        cur.execute("SELECT name FROM ava_users WHERE id=%s", (session["user_id"],))
+        urow = cur.fetchone()
+    uname = urow["name"] if urow else "there"
+    persona_context = get_ego_context(db, customer["id"])
+    greeting = gemini_reply(persona_context, [], f"(A visitor named {uname} just arrived to talk with you. Greet them warmly in one or two sentences and invite them to talk.)", uname)
     db.commit()
+    g_audio, g_err = elevenlabs_tts(greeting, customer.get("voice_id"))
     return jsonify({
         "session_id": session_id,
         "customer_id": customer["id"],
         "customer_name": customer["name"],
-        "persona": customer["persona_summary"] or ""
+        "persona": customer["persona_summary"] or "",
+        "greeting": greeting,
+        "greeting_audio": g_audio,
+        "voice_error": g_err
     })
 
 @app.route("/u/talk", methods=["POST"])
@@ -505,13 +542,20 @@ def customer_session():
         try: ego = json.loads(customer["ego_model"])
         except: pass
 
+    persona_context = get_ego_context(db, customer["id"])
+    opening = gemini_interview_opening(persona_context)
+    o_audio, o_err = elevenlabs_tts(opening, customer.get("voice_id"))
+
     return jsonify({
         "session_id": session_id,
         "customer_id": customer["id"],
         "name": customer["name"],
         "knowledge_count": knowledge_count,
         "persona": customer["persona_summary"] or "",
-        "ego_model": ego
+        "ego_model": ego,
+        "opening": opening,
+        "opening_audio": o_audio,
+        "voice_error": o_err
     })
 
 @app.route("/customer/train", methods=["POST"])
@@ -551,13 +595,37 @@ def customer_train():
                         (customer_id, value, session_id, "value", "ego", datetime.utcnow().isoformat()))
     db.commit()
 
-    threading.Thread(target=update_ego_model, args=(customer_id, ego_data, text), daemon=True).start()
+    # learn synchronously so the persona updates reliably (no silent background failure)
+    persona = update_ego_model(customer_id, ego_data, text) or (customer["persona_summary"] or "")
+
+    # the twin speaks back: a warm follow-up question to go deeper
+    with db.cursor() as cur:
+        cur.execute("SELECT speaker, text FROM ava_messages WHERE customer_id=%s AND user_id IS NULL ORDER BY timestamp DESC LIMIT 10", (customer_id,))
+        history = [{"speaker": ("you" if r["speaker"] == "customer" else "twin"), "text": r["text"]} for r in reversed(cur.fetchall())]
+    persona_context = get_ego_context(db, customer_id)
+    question = gemini_interview_question(persona_context, history, text)
+
+    with db.cursor() as cur:
+        cur.execute("INSERT INTO ava_messages (session_id, customer_id, speaker, text, timestamp) VALUES (%s,%s,%s,%s,%s)",
+                    (session_id, customer_id, "twin", question, datetime.utcnow().isoformat()))
+    db.commit()
+
+    q_audio, q_err = elevenlabs_tts(question, customer.get("voice_id"))
+
+    with db.cursor() as cur:
+        cur.execute("SELECT COUNT(*) as cnt FROM ava_knowledge_base WHERE customer_id=%s", (customer_id,))
+        total = cur.fetchone()["cnt"]
 
     return jsonify({
         "ok": True,
         "chunks_added": chunks_added,
         "beliefs_extracted": len(ego_data.get("beliefs", [])),
-        "values_extracted": len(ego_data.get("values", []))
+        "values_extracted": len(ego_data.get("values", [])),
+        "knowledge_count": total,
+        "persona": persona,
+        "reply": question,
+        "audio": q_audio,
+        "voice_error": q_err
     })
 
 @app.route("/customer/upload_recording", methods=["POST"])
