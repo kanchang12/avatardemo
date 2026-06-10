@@ -90,6 +90,16 @@ textarea:focus{border-color:var(--accent)}
   </div>
 </div>
 
+<div style="max-width:1180px;margin:0 auto;padding:0 22px 30px">
+  <div class="panel">
+    <h3>Privacy &amp; disclosure — who your twin may tell what</h3>
+    <p class="desc">Every memory below has a rule. <b>Public</b> = anyone may hear it. <b>Restricted</b> = only people you allow. You can also block specific people from a public memory. The twin enforces this by never even loading what a person isn't allowed to hear. Items auto-flagged from things you said like “don't tell…” start as Restricted.</p>
+    <div id="privacyList" style="display:flex;flex-direction:column;gap:10px;max-height:420px;overflow-y:auto">
+      <span style="font-size:.82rem;color:var(--muted)">Loading memories…</span>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <audio id="player"></audio>
 
@@ -192,6 +202,8 @@ async function sendAnswer(){
     document.getElementById('answer').value='';
     if(typeof d.knowledge_count!=='undefined') document.getElementById('kc').textContent=d.knowledge_count;
     if(d.persona) document.getElementById('ego').textContent=d.persona;
+    if(d.sensitive) toast('Flagged as private — set who may hear it below.');
+    loadPrivacy();
     showVoiceWarn(d.voice_error);
     if(d.reply){ addConvo('twin',d.reply); twinSpeak(d.audio,d.reply, ()=>{ if(active) listen(); }); }
   }catch(e){ toast('Save failed.'); }
@@ -211,6 +223,57 @@ async function loadRecordings(){
     box.innerHTML=recs.map(r=>'<div class="reci">🎬 '+new Date(r.created_at).toLocaleString()+' · '+Math.round((r.size_bytes||0)/1024)+' KB <a href="/customer/recording/'+r.id+'" target="_blank">play</a></div>').join('');
   }catch(e){}
 }
+
+/* ── privacy & disclosure ── */
+let _people=[];
+async function loadPrivacy(){
+  try{
+    _people=await (await fetch('/customer/people')).json();
+    const mem=await (await fetch('/customer/knowledge')).json();
+    const box=document.getElementById('privacyList');
+    if(!mem.length){ box.innerHTML='<span style="font-size:.82rem;color:var(--muted)">No memories yet — train your twin first.</span>'; return; }
+    box.innerHTML=mem.map(m=>renderMem(m)).join('');
+  }catch(e){}
+}
+function renderMem(m){
+  const allow=(m.allow_users||[]), deny=(m.deny_users||[]);
+  const restricted=m.visibility==='restricted';
+  const peopleChecks=(list,kind)=> _people.map(p=>{
+    const on=list.includes(p.id);
+    return '<label style="display:inline-flex;align-items:center;gap:4px;font-size:.74rem;color:#cfcfe6;margin:2px 8px 2px 0">'+
+      '<input type="checkbox" data-mem="'+m.id+'" data-kind="'+kind+'" data-user="'+p.id+'" '+(on?'checked':'')+'> '+(p.name||'Guest')+'</label>';
+  }).join('');
+  return '<div style="background:#15151f;border:1px solid var(--line2);border-radius:12px;padding:12px" data-card="'+m.id+'">'+
+    '<div style="display:flex;gap:10px;align-items:flex-start">'+
+      '<div style="flex:1"><div style="font-size:.7rem;color:var(--muted);margin-bottom:3px">'+m.category+'</div>'+
+      '<div style="font-size:.88rem;color:#eaeaf5">'+m.chunk.replace(/</g,'&lt;')+'</div></div>'+
+      '<select data-vis="'+m.id+'" style="background:#0f0f1a;border:1px solid var(--line2);color:#fff;border-radius:8px;padding:6px;font-size:.78rem">'+
+        '<option value="public"'+(restricted?'':' selected')+'>Public</option>'+
+        '<option value="restricted"'+(restricted?' selected':'')+'>Restricted</option></select>'+
+    '</div>'+
+    '<div data-allow="'+m.id+'" style="margin-top:8px;'+(restricted?'':'display:none')+'">'+
+      '<div style="font-size:.72rem;color:var(--green);margin-bottom:2px">Only these people may hear it:</div>'+peopleChecks(allow,'allow')+'</div>'+
+    '<div data-deny="'+m.id+'" style="margin-top:8px;'+(restricted?'display:none':'')+'">'+
+      '<div style="font-size:.72rem;color:#fca5a5;margin-bottom:2px">Public, but never tell:</div>'+peopleChecks(deny,'deny')+'</div>'+
+    '<button onclick="savePolicy('+m.id+')" style="margin-top:10px;background:var(--accent);border:none;color:#fff;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:.78rem">Save rule</button>'+
+  '</div>';
+}
+document.addEventListener('change',e=>{
+  if(e.target.matches('select[data-vis]')){
+    const id=e.target.getAttribute('data-vis'); const r=e.target.value==='restricted';
+    const a=document.querySelector('[data-allow="'+id+'"]'), d=document.querySelector('[data-deny="'+id+'"]');
+    if(a) a.style.display=r?'':'none'; if(d) d.style.display=r?'none':'';
+  }
+});
+async function savePolicy(id){
+  const vis=document.querySelector('select[data-vis="'+id+'"]').value;
+  const allow=[...document.querySelectorAll('input[data-mem="'+id+'"][data-kind="allow"]:checked')].map(c=>c.getAttribute('data-user'));
+  const deny=[...document.querySelectorAll('input[data-mem="'+id+'"][data-kind="deny"]:checked')].map(c=>c.getAttribute('data-user'));
+  await fetch('/customer/knowledge/'+id+'/policy',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({visibility:vis,allow_users:allow,deny_users:deny})});
+  toast('Disclosure rule saved.');
+}
+loadPrivacy();
 </script>
 </body>
 </html>
