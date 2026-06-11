@@ -95,37 +95,44 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <script>
-/* ── mic / voice input ── */
-let mediaRecorder=null, audioChunks=[], micOn=false;
+/* ── push-to-talk mic ── */
+let mediaRecorder=null, audioChunks=[], micStream=null;
 document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('micBtn').onclick = async ()=>{
-    if(!micOn){
-      try{
-        const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks=[];
-        mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) audioChunks.push(e.data); };
-        mediaRecorder.onstop = async ()=>{
-          const blob = new Blob(audioChunks,{type:'audio/webm'});
-          const fd = new FormData(); fd.append('audio',blob,'speech.webm');
-          try{
-            const d=await(await fetch('/u/transcribe',{method:'POST',body:fd})).json();
-            if(d.text){ document.getElementById('msgInp').value=d.text; sendText(); }
-          } catch(e){ console.error('transcribe error',e); }
-          stream.getTracks().forEach(t=>t.stop());
-        };
-        mediaRecorder.start();
-        micOn=true;
-        document.getElementById('micBtn').classList.add('rec');
-        document.getElementById('micBtn').textContent='⏹';
-      } catch(e){ showWarn('Mic access denied'); }
-    } else {
-      if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
-      micOn=false;
-      document.getElementById('micBtn').classList.remove('rec');
-      document.getElementById('micBtn').textContent='🎙';
-    }
-  };
+  const btn = document.getElementById('micBtn');
+
+  async function startRec(){
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+      audioChunks=[];
+      mediaRecorder = new MediaRecorder(micStream);
+      mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = async ()=>{
+        btn.classList.remove('rec'); btn.textContent='🎙';
+        const blob = new Blob(audioChunks,{type:'audio/webm'});
+        if(blob.size < 1000){ micStream.getTracks().forEach(t=>t.stop()); return; }
+        const fd = new FormData(); fd.append('audio',blob,'speech.webm');
+        try{
+          const d=await(await fetch('/u/transcribe',{method:'POST',body:fd})).json();
+          if(d.text && d.text.trim()) sendTextDirect(d.text.trim());
+        } catch(e){ console.error('transcribe error',e); }
+        micStream.getTracks().forEach(t=>t.stop());
+      };
+      mediaRecorder.start();
+      btn.classList.add('rec'); btn.textContent='🔴';
+    } catch(e){ showWarn('Mic access denied'); }
+  }
+
+  function stopRec(){
+    if(mediaRecorder && mediaRecorder.state==='recording') mediaRecorder.stop();
+  }
+
+  // mouse
+  btn.addEventListener('mousedown', e=>{ e.preventDefault(); startRec(); });
+  btn.addEventListener('mouseup', stopRec);
+  btn.addEventListener('mouseleave', stopRec);
+  // touch
+  btn.addEventListener('touchstart', e=>{ e.preventDefault(); startRec(); });
+  btn.addEventListener('touchend', e=>{ e.preventDefault(); stopRec(); });
 });
 </script>
 <script>
@@ -232,12 +239,10 @@ async function startLiveAvatar(){
 
 
 /* ── send text, get reply ── */
-async function sendText(){
-  const inp=document.getElementById('msgInp');
-  const txt=inp.value.trim(); if(!txt) return;
-  inp.value=''; addMsg('user',txt);
+async function sendTextDirect(txt){
+  if(!txt || !txt.trim()) return;
+  addMsg('user',txt);
   document.getElementById('sendBtn').disabled=true;
-
   let avatarMsgEl=null, fullText='';
   try{
     const resp=await fetch('/u/talk_stream',{method:'POST',
@@ -268,6 +273,13 @@ async function sendText(){
     }
   }catch(e){ addMsg('avatar','(connection error)'); }
   document.getElementById('sendBtn').disabled=false;
+}
+
+async function sendText(){
+  const inp=document.getElementById('msgInp');
+  const txt=inp.value.trim(); if(!txt) return;
+  inp.value='';
+  await sendTextDirect(txt);
 }
 
 function playMp3Promise(src){
