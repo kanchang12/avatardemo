@@ -366,29 +366,20 @@ def elevenlabs_tts(text, voice_id=None):
 # ── LiveAvatar session token ──────────────────────────────────────────────────
 
 def liveavatar_start():
-    """Create token + start session. Returns livekit_url, livekit_client_token, session_id, error."""
+    """Create LITE token + start session. Returns livekit_url, livekit_token, ws_url, session_id, error."""
     if not LIVEAVATAR_API_KEY or not LIVEAVATAR_AVATAR_ID:
-        return None, None, None, "Missing LIVEAVATAR_API_KEY or LIVEAVATAR_AVATAR_ID"
-    if not LIVEAVATAR_SECRET_ID or not ELEVENLABS_AGENT_ID:
-        return None, None, None, "Missing LIVEAVATAR_SECRET_ID or ELEVENLABS_AGENT_ID"
+        return None, None, None, None, "Missing LIVEAVATAR_API_KEY or LIVEAVATAR_AVATAR_ID"
     try:
-        # Step 1: create session token
+        # Step 1: create LITE session token (no agent connector - we drive audio ourselves)
         r = requests.post(
             "https://api.liveavatar.com/v1/sessions/token",
             headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
-            json={
-                "mode": "LITE",
-                "avatar_id": LIVEAVATAR_AVATAR_ID,
-                "elevenlabs_agent_config": {
-                    "secret_id": LIVEAVATAR_SECRET_ID,
-                    "agent_id": ELEVENLABS_AGENT_ID
-                }
-            },
+            json={"mode": "LITE", "avatar_id": LIVEAVATAR_AVATAR_ID},
             timeout=30
         )
         if r.status_code != 200:
-            return None, None, None, f"Token {r.status_code}: {r.text[:200]}"
-        token_data = r.json().get("data", {})
+            return None, None, None, None, f"Token {r.status_code}: {r.text[:200]}"
+        token_data   = r.json().get("data", {})
         session_token = token_data.get("session_token")
         session_id    = token_data.get("session_id")
 
@@ -399,11 +390,33 @@ def liveavatar_start():
             timeout=30
         )
         if r2.status_code not in (200, 201):
-            return None, None, None, f"Start {r2.status_code}: {r2.text[:200]}"
-        start_data = r2.json().get("data", {})
-        return start_data.get("livekit_url"), start_data.get("livekit_client_token"), session_id, None
+            return None, None, None, None, f"Start {r2.status_code}: {r2.text[:200]}"
+        d = r2.json().get("data", {})
+        return d.get("livekit_url"), d.get("livekit_client_token"), d.get("ws_url"), session_id, None
     except Exception as e:
-        return None, None, None, f"LiveAvatar exception: {e}"
+        return None, None, None, None, f"LiveAvatar exception: {e}"
+
+# ── ElevenLabs PCM 24kHz for LiveAvatar ──────────────────────────────────────
+
+def elevenlabs_tts_pcm(text, voice_id=None):
+    """Returns raw PCM 16-bit 24kHz audio as base64, for LiveAvatar agent.speak."""
+    vid = (voice_id or ELEVENLABS_VOICE_ID or "").strip()
+    if not ELEVENLABS_API_KEY or not vid: return None
+    try:
+        r = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{vid}/stream",
+            headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+            json={"text": text, "model_id": ELEVENLABS_MODEL,
+                  "output_format": "pcm_24000",
+                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}},
+            timeout=30, stream=True
+        )
+        if r.status_code == 200:
+            raw = b"".join(r.iter_content(chunk_size=4096))
+            return base64.b64encode(raw).decode()
+    except Exception as e:
+        app.logger.error(f"ElevenLabs PCM error: {e}")
+    return None
 
 # ── face recognition (identity gate) ─────────────────────────────────────────────
 
@@ -433,11 +446,12 @@ def find_face(db, enc):
 
 @app.route("/u/liveavatar_token", methods=["POST"])
 def u_liveavatar_token():
-    """Frontend calls this to start a LiveAvatar session and get LiveKit credentials."""
-    livekit_url, livekit_token, session_id, err = liveavatar_start()
+    """Frontend calls this to start a LiveAvatar LITE session."""
+    livekit_url, livekit_token, ws_url, session_id, err = liveavatar_start()
     if err:
         return jsonify({"error": err}), 500
-    return jsonify({"livekit_url": livekit_url, "livekit_token": livekit_token, "session_id": session_id})
+    return jsonify({"livekit_url": livekit_url, "livekit_token": livekit_token,
+                    "ws_url": ws_url, "session_id": session_id})
 
 @app.route("/")
 def user_home(): return render_template("user/index.html")
@@ -498,8 +512,10 @@ def user_session():
     ctx = build_context(db, customer["id"], session["user_id"], "greeting hello")
     greeting = gemini_reply(ctx, [], f"(A person named {uname} just arrived. Greet them warmly in one or two sentences.)", uname)
     g_audio, g_err = elevenlabs_tts(greeting, customer.get("voice_id"))
+    g_pcm = elevenlabs_tts_pcm(greeting, customer.get("voice_id")) if ELEVENLABS_API_KEY else None
     return jsonify({"session_id": sid, "customer_name": customer["name"], "greeting": greeting,
-                    "greeting_audio": g_audio, "voice_error": g_err, "brain_error": _LAST_GEMINI_ERROR})
+                    "greeting_audio": g_audio, "greeting_pcm": g_pcm,
+                    "voice_error": g_err, "brain_error": _LAST_GEMINI_ERROR})
 
 @app.route("/u/talk", methods=["POST"])
 def user_talk():
@@ -521,7 +537,8 @@ def user_talk():
     store_message(db, cid, uid, "avatar", reply, sid)
     db.commit()
     audio, verr = elevenlabs_tts(reply, customer.get("voice_id"))
-    return jsonify({"reply": reply, "audio": audio, "voice_error": verr, "brain_error": _LAST_GEMINI_ERROR})
+    pcm = elevenlabs_tts_pcm(reply, customer.get("voice_id")) if ELEVENLABS_API_KEY else None
+    return jsonify({"reply": reply, "audio": audio, "pcm_audio": pcm, "voice_error": verr, "brain_error": _LAST_GEMINI_ERROR})
 
 # ════════════════════════════════ CUSTOMER PORTAL ════════════════════════════
 
