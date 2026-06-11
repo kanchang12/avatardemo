@@ -24,7 +24,8 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
 ELEVENLABS_MODEL    = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 LIVEAVATAR_API_KEY  = os.getenv("LIVEAVATAR_API_KEY", "")
 LIVEAVATAR_AVATAR_ID= os.getenv("LIVEAVATAR_AVATAR_ID", "")
-LIVEAVATAR_SECRET_ID= os.getenv("LIVEAVATAR_SECRET_ID", "")  # secret_id from registering ElevenLabs key with LiveAvatar
+LIVEAVATAR_SECRET_ID= os.getenv("LIVEAVATAR_SECRET_ID", "")
+LIVEAVATAR_GEMINI_SECRET_ID = os.getenv("LIVEAVATAR_GEMINI_SECRET_ID", "")  # secret_id from registering ElevenLabs key with LiveAvatar
 ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID", "")   # ElevenLabs Conversational AI agent ID
 RECORDINGS_DIR      = os.getenv("RECORDINGS_DIR", os.path.join(os.path.dirname(__file__), "recordings"))
 FACE_TOLERANCE      = float(os.getenv("FACE_TOLERANCE", "0.42"))  # tighter = stricter identity gate
@@ -366,20 +367,32 @@ def elevenlabs_tts(text, voice_id=None):
 # ── LiveAvatar session token ──────────────────────────────────────────────────
 
 def liveavatar_start():
-    """Create LITE token + start session. Returns livekit_url, livekit_token, ws_url, session_id, error."""
+    """Create LITE token + start session using Gemini Live connector.
+    Returns livekit_url, livekit_token, ws_url, session_id, error."""
     if not LIVEAVATAR_API_KEY or not LIVEAVATAR_AVATAR_ID:
         return None, None, None, None, "Missing LIVEAVATAR_API_KEY or LIVEAVATAR_AVATAR_ID"
+    if not LIVEAVATAR_GEMINI_SECRET_ID:
+        return None, None, None, None, "Missing LIVEAVATAR_GEMINI_SECRET_ID"
     try:
-        # Step 1: create LITE session token (no agent connector - we drive audio ourselves)
+        # Step 1: create LITE session token with Gemini Live connector
         r = requests.post(
             "https://api.liveavatar.com/v1/sessions/token",
             headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
-            json={"mode": "LITE", "avatar_id": LIVEAVATAR_AVATAR_ID},
+            json={
+                "mode": "LITE",
+                "avatar_id": LIVEAVATAR_AVATAR_ID,
+                "gemini_realtime_config": {
+                    "secret_id": LIVEAVATAR_GEMINI_SECRET_ID,
+                    "voice": "Puck",
+                    "model": "gemini-3.1-flash-live-preview",
+                    "temperature": 0.8
+                }
+            },
             timeout=30
         )
         if r.status_code != 200:
             return None, None, None, None, f"Token {r.status_code}: {r.text[:200]}"
-        token_data   = r.json().get("data", {})
+        token_data    = r.json().get("data", {})
         session_token = token_data.get("session_token")
         session_id    = token_data.get("session_id")
 
@@ -578,38 +591,45 @@ def user_talk_stream():
     import re, json as _json
 
     def generate():
-        # Stream Gemini token by token, buffer into sentences
         convo = "\n".join(f"{m['speaker']}: {m['text']}" for m in recent[-10:])
         system = f"""You ARE this person, speaking in first person. Stay in character; never say you are an AI.
-Use ONLY the knowledge below. Keep replies 1-4 spoken sentences.
+Use ONLY the knowledge below. Keep replies 1-3 SHORT spoken sentences. Be concise.
 {ctx or '(Speak warmly.)'}"""
-        prompt = f"Recent:\n{convo}\n\n{speaker_name} just said: \"{text}\"\n\nReply now:"
+        prompt = f"Recent:\n{convo}\n\n{speaker_name}: \"{text}\"\n\nYour reply (1-2 sentences max):"
 
+        # Use flash model for speed
+        fast_model = "gemini-2.0-flash"
         cfg = genai_types.GenerateContentConfig(temperature=0.7, system_instruction=system)
         full_reply = []
-        sentence_buf = ""
+        buf = ""
+        word_count = 0
 
         try:
             for chunk in _genai_client.models.generate_content_stream(
-                model=GEMINI_MODEL, contents=prompt, config=cfg
+                model=fast_model, contents=prompt, config=cfg
             ):
                 piece = chunk.text or ""
-                sentence_buf += piece
+                buf += piece
                 full_reply.append(piece)
-                # flush on sentence boundary
-                sentences = re.split(r'(?<=[.!?])\s+', sentence_buf)
-                if len(sentences) > 1:
-                    for s in sentences[:-1]:
-                        s = s.strip()
-                        if not s: continue
-                        # TTS this sentence
-                        audio_b64 = _tts_sentence(s, voice_id)
-                        yield _json.dumps({"text": s, "audio": audio_b64}) + "\n"
-                    sentence_buf = sentences[-1]
+                word_count += piece.count(" ")
+                # flush on sentence end OR every ~8 words to reduce latency
+                flush = False
+                flush_text = ""
+                if re.search(r'[.!?]\s*$', buf):
+                    flush = True; flush_text = buf.strip(); buf = ""
+                elif word_count >= 8 and " " in buf:
+                    # flush at last space boundary
+                    last_space = buf.rfind(" ")
+                    flush_text = buf[:last_space].strip()
+                    buf = buf[last_space+1:]
+                    flush = True; word_count = 0
+                if flush and flush_text:
+                    audio_b64 = _tts_sentence(flush_text, voice_id)
+                    yield _json.dumps({"text": flush_text, "audio": audio_b64}) + "\n"
             # flush remainder
-            if sentence_buf.strip():
-                audio_b64 = _tts_sentence(sentence_buf.strip(), voice_id)
-                yield _json.dumps({"text": sentence_buf.strip(), "audio": audio_b64}) + "\n"
+            if buf.strip():
+                audio_b64 = _tts_sentence(buf.strip(), voice_id)
+                yield _json.dumps({"text": buf.strip(), "audio": audio_b64}) + "\n"
         except Exception as e:
             yield _json.dumps({"error": str(e)}) + "\n"
             return
@@ -635,7 +655,7 @@ def _tts_sentence(text, voice_id):
         r = requests.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{vid}/stream",
             headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
-            json={"text": text, "model_id": "eleven_flash_v2_5",
+            json={"text": text, "model_id": "eleven_turbo_v2_5",
                   "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}},
             timeout=15, stream=True
         )
