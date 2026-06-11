@@ -508,6 +508,7 @@ def user_session():
         cur.execute("SELECT name FROM ava_users WHERE id=%s", (session["user_id"],))
         urow = cur.fetchone()
     db.commit()
+    session["session_id"] = sid
     uname = urow["name"] if urow else "there"
     ctx = build_context(db, customer["id"], session["user_id"], "greeting hello")
     greeting = gemini_reply(ctx, [], f"(A person named {uname} just arrived. Greet them warmly in one or two sentences.)", uname)
@@ -540,7 +541,7 @@ def u_transcribe():
 def user_talk():
     if "user_id" not in session: return jsonify({"error": "Not identified"}), 401
     data = request.get_json(silent=True) or {}
-    text = (data.get("text") or "").strip(); sid = data.get("session_id")
+    text = (data.get("text") or "").strip(); sid = data.get("session_id") or session.get("session_id")
     if not text: return jsonify({"error": "Empty message"}), 400
     db = get_db(); customer = get_first_customer(db)
     if not customer: return jsonify({"error": "No active avatar"}), 404
@@ -603,7 +604,7 @@ def customer_session():
 def customer_train():
     if "customer_id" not in session: return jsonify({"error": "Not logged in"}), 401
     data = request.get_json(silent=True) or {}
-    text = (data.get("text") or "").strip(); sid = data.get("session_id")
+    text = (data.get("text") or "").strip(); sid = data.get("session_id") or session.get("session_id")
     if not text or len(text) < 3: return jsonify({"ok": True, "chunks_added": 0})
     db = get_db(); cid = session["customer_id"]
     store_message(db, cid, None, "customer", text, sid)
