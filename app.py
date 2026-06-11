@@ -507,12 +507,18 @@ def u_transcribe():
         b64 = base64.b64encode(raw).decode()
         result = _genai_client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=[
-                {"inline_data": {"mime_type": "audio/webm", "data": b64}},
-                "Transcribe this audio exactly. Return only the spoken words, nothing else."
-            ]
+            contents=[{
+                "parts": [
+                    {"inline_data": {"mime_type": "audio/webm", "data": b64}},
+                    {"text": "Transcribe this audio. Return only the spoken words, nothing else. If silent or unclear, return empty string."}
+                ]
+            }]
         )
-        return jsonify({"text": result.text.strip()})
+        txt = (result.text or "").strip()
+        # reject if Gemini returned the prompt back
+        if "transcribe" in txt.lower() or "spoken words" in txt.lower():
+            return jsonify({"text": ""})
+        return jsonify({"text": txt})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -527,7 +533,7 @@ def user_talk():
     cid, uid = customer["id"], session["user_id"]
     with db.cursor() as cur:
         cur.execute("SELECT name FROM ava_users WHERE id=%s", (uid,)); row = cur.fetchone()
-        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 8", (uid,))
+        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s AND customer_id=%s ORDER BY timestamp DESC LIMIT 16", (uid, cid))
         recent = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(cur.fetchall())]
     speaker_name = row["name"] if row else "Guest"
     ctx = build_context(db, cid, uid, text)              # audience-filtered + this user's episodic memory
@@ -557,7 +563,7 @@ def user_talk_stream():
 
     with db.cursor() as cur:
         cur.execute("SELECT name FROM ava_users WHERE id=%s", (uid,)); row = cur.fetchone()
-        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 8", (uid,))
+        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s AND customer_id=%s ORDER BY timestamp DESC LIMIT 16", (uid, cid))
         recent = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(cur.fetchall())]
     speaker_name = row["name"] if row else "Guest"
     ctx = build_context(db, cid, uid, text)
