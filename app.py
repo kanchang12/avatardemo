@@ -502,16 +502,17 @@ def u_transcribe():
     f = request.files.get("audio")
     if not f: return jsonify({"error":"no audio"}),400
     try:
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".webm",delete=False) as tmp:
-            f.save(tmp.name)
-            audio_part = _genai_client.files.upload(path=tmp.name, config={"mime_type":"audio/webm"})
-            result = _genai_client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=[audio_part, "Transcribe this audio. Return only the spoken text, nothing else."]
-            )
-            os.unlink(tmp.name)
-            return jsonify({"text": result.text.strip()})
+        raw = f.read()
+        if not raw: return jsonify({"error":"empty audio"}),400
+        b64 = base64.b64encode(raw).decode()
+        result = _genai_client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[
+                {"inline_data": {"mime_type": "audio/webm", "data": b64}},
+                "Transcribe this audio exactly. Return only the spoken words, nothing else."
+            ]
+        )
+        return jsonify({"text": result.text.strip()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
