@@ -732,8 +732,8 @@ def admin_stats():
 # ── misc ─────────────────────────────────────────────────────────────────────
 @app.route("/avatar/thumbnail")
 def avatar_thumbnail():
-    local = os.path.join(os.path.dirname(__file__), "static", "avatar.jpg")
-    if os.path.exists(local): return send_file(local, mimetype="image/jpeg")
+    local = os.path.join(os.path.dirname(__file__), "static", "petar.png")
+    if os.path.exists(local): return send_file(local, mimetype="image/png")
     return jsonify({"error": "No image"}), 404
 
 @app.route("/healthz")
