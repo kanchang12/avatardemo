@@ -444,7 +444,7 @@ def find_face(db, enc):
 
 # ════════════════════════════════ USER PORTAL ════════════════════════════════
 
-@app.route("/u/liveavatar_token", methods=["POST"])
+@app.route("/u/liveavatar_token", methods=["GET","POST"])
 def u_liveavatar_token():
     """Frontend calls this to start a LiveAvatar LITE session."""
     livekit_url, livekit_token, ws_url, session_id, err = liveavatar_start()
@@ -456,7 +456,7 @@ def u_liveavatar_token():
 @app.route("/")
 def user_home(): return render_template("user/index.html")
 
-@app.route("/u/identify", methods=["POST"])
+@app.route("/u/identify", methods=["GET","POST"])
 def user_identify():
     data = request.get_json(silent=True) or {}
     b64, password, name = data.get("image"), data.get("password", ""), (data.get("name") or "").strip()
@@ -496,7 +496,7 @@ def user_identify():
     return jsonify({"ok": True, "user_id": user_id, "name": uname, "returning": returning,
                     "avatar_name": customer["name"] if customer else "the avatar", "history": hist})
 
-@app.route("/u/session", methods=["POST"])
+@app.route("/u/session", methods=["GET","POST"])
 def user_session():
     if "user_id" not in session: return jsonify({"error": "Not identified"}), 401
     db = get_db(); customer = get_first_customer(db)
@@ -517,7 +517,26 @@ def user_session():
                     "greeting_audio": g_audio, "greeting_pcm": g_pcm,
                     "voice_error": g_err, "brain_error": _LAST_GEMINI_ERROR})
 
-@app.route("/u/talk", methods=["POST"])
+@app.route("/u/transcribe", methods=["GET","POST"])
+def u_transcribe():
+    """Transcribe audio via Gemini for voice input."""
+    f = request.files.get("audio")
+    if not f: return jsonify({"error":"no audio"}),400
+    try:
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".webm",delete=False) as tmp:
+            f.save(tmp.name)
+            audio_part = _genai_client.files.upload(path=tmp.name, config={"mime_type":"audio/webm"})
+            result = _genai_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[audio_part, "Transcribe this audio. Return only the spoken text, nothing else."]
+            )
+            os.unlink(tmp.name)
+            return jsonify({"text": result.text.strip()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/u/talk", methods=["GET","POST"])
 def user_talk():
     if "user_id" not in session: return jsonify({"error": "Not identified"}), 401
     data = request.get_json(silent=True) or {}
