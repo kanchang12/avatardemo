@@ -50,6 +50,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 .composer input:focus{border-color:var(--accent)}
 .composer button{border:none;color:#fff;width:48px;height:46px;border-radius:10px;cursor:pointer;font-size:1.1rem}
 .send{background:var(--accent)}.send:disabled{background:var(--line2);color:#555}
+.micbtn{background:#15151f;border:1px solid var(--line2)!important}.micbtn.rec{background:var(--red)!important;border-color:var(--red)!important}
 @media(max-width:760px){.body{flex-direction:column}.side{width:100%;border-left:none;border-top:1px solid var(--line)}.stage{height:50vh}}
 </style>
 </head>
@@ -84,14 +85,47 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
     <div class="side">
       <div class="log" id="log"></div>
       <div class="composer">
-        <input id="msgInp" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendText()">
+        <button class="micbtn" id="micBtn" title="Hold to speak">🎙</button>
+        <input id="msgInp" placeholder="Type or tap mic to speak…" onkeydown="if(event.key==='Enter')sendText()">
         <button class="send" id="sendBtn" onclick="sendText()">↑</button>
       </div>
     </div>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js">
+/* ── mic / voice input ── */
+let mediaRecorder=null, audioChunks=[], micOn=false;
+document.getElementById('micBtn').onclick = async ()=>{
+  if(!micOn){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks=[];
+      mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = async ()=>{
+        const blob = new Blob(audioChunks,{type:'audio/webm'});
+        const fd = new FormData(); fd.append('audio',blob,'speech.webm');
+        try{
+          const d=await(await fetch('/u/transcribe',{method:'POST',body:fd})).json();
+          if(d.text){ document.getElementById('msgInp').value=d.text; sendText(); }
+        } catch(e){ console.error('transcribe error',e); }
+        stream.getTracks().forEach(t=>t.stop());
+      };
+      mediaRecorder.start();
+      micOn=true;
+      document.getElementById('micBtn').classList.add('rec');
+      document.getElementById('micBtn').textContent='⏹';
+    } catch(e){ showWarn('Mic access denied'); }
+  } else {
+    if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+    micOn=false;
+    document.getElementById('micBtn').classList.remove('rec');
+    document.getElementById('micBtn').textContent='🎙';
+  }
+};
+
+</script>
 <script>
 let gateStream=null, livekitRoom=null, avatarWs=null, wsReady=false, sdSession=null;
 
