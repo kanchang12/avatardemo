@@ -600,14 +600,19 @@ Use ONLY the knowledge below. Keep replies 1-4 spoken sentences.
             yield _json.dumps({"error": str(e)}) + "\n"
             return
 
-        # store full reply in DB
+        # store full reply in DB - fresh connection inside generator
         full_text = "".join(full_reply).strip()
-        store_message(db, cid, uid, "user", text, sid)
-        store_message(db, cid, uid, "avatar", full_text, sid)
-        db.commit()
+        try:
+            db2 = get_db()
+            store_message(db2, cid, uid, "user", text, sid)
+            store_message(db2, cid, uid, "avatar", full_text, sid)
+            db2.commit()
+        except Exception as e:
+            app.logger.error(f"DB store error: {e}")
 
-    return Response(stream_with_context(generate()), mimetype="text/plain",
-                    headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})
+    return Response(stream_with_context(generate()), mimetype="text/event-stream",
+                    headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache",
+                             "Transfer-Encoding": "chunked"})
 
 def _tts_sentence(text, voice_id):
     """TTS a single sentence, return base64 mp3 or None."""
