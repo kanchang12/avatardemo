@@ -181,7 +181,7 @@ async function enterTalk(d){
   await startLiveAvatar();
 }
 
-/* ── LiveAvatar LITE mode — Gemini Live connector ── */
+/* ── LiveAvatar LITE mode — our Gemini pipeline drives lip sync ── */
 async function startLiveAvatar(){
   showBadge('Connecting…');
   try{
@@ -196,13 +196,8 @@ async function startLiveAvatar(){
         track.attach(document.getElementById('avatarVid'));
         document.getElementById('avatarImg').style.display='none';
         document.getElementById('avatarVid').style.display='block';
-        showBadge('● Live');
-      }
-      if(track.kind===LK.Track.Kind.Audio){
-        track.attach(); // play avatar audio
       }
     });
-
     livekitRoom.on(LK.RoomEvent.TrackUnsubscribed,(track)=>{
       if(track.kind===LK.Track.Kind.Video){
         document.getElementById('avatarVid').style.display='none';
@@ -210,33 +205,45 @@ async function startLiveAvatar(){
         document.getElementById('statusBadge').className='status-badge';
       }
     });
-
-    // Transcriptions from Gemini Live via data channel
-    livekitRoom.on(LK.RoomEvent.DataReceived,(data)=>{
-      try{
-        const msg=JSON.parse(new TextDecoder().decode(data));
-        const et=msg.elevenlabs_event_type||msg.event_type||'';
-        if(msg.event_type==='avatar.speak_started') showBadge('● Speaking');
-        if(msg.event_type==='avatar.speak_ended') document.getElementById('statusBadge').className='status-badge';
-        if(msg.event_type==='user.transcription' && msg.text) addMsg('user', msg.text);
-        if(msg.event_type==='avatar.transcription' && msg.text) addMsg('avatar', msg.text);
-      }catch(e){}
-    });
-
     livekitRoom.on(LK.RoomEvent.Disconnected,()=>{
       document.getElementById('avatarVid').style.display='none';
       document.getElementById('avatarImg').style.display='block';
     });
 
     await livekitRoom.connect(r.livekit_url, r.livekit_token, {autoSubscribe:true});
-    // publish mic so Gemini Live can hear the user
-    await livekitRoom.localParticipant.setMicrophoneEnabled(true);
 
-    showBadge('Connected'); setTimeout(()=>document.getElementById('statusBadge').className='status-badge',2000);
-    // play greeting audio as fallback while video loads
-    if(sdSession?.greeting_audio) playMp3(sdSession.greeting_audio, sdSession.greeting);
+    // WebSocket for sending PCM audio to drive lip sync
+    if(r.ws_url){
+      avatarWs = new WebSocket(r.ws_url);
+      avatarWs.onmessage=(e)=>{
+        try{
+          const msg=JSON.parse(e.data);
+          if(msg.type==='session.state_updated' && msg.state==='connected'){
+            wsReady=true;
+            showBadge('Connected');
+            setTimeout(()=>document.getElementById('statusBadge').className='status-badge',2000);
+          }
+          if(msg.type==='agent.speak_started') showBadge('● Speaking');
+          if(msg.type==='agent.speak_ended') document.getElementById('statusBadge').className='status-badge';
+        }catch(e){}
+      };
+      avatarWs.onerror=()=>{ wsReady=false; };
+      avatarWs.onclose=()=>{ wsReady=false; };
+    }
 
   } catch(e){ showWarn('LiveAvatar: '+e.message); fallback(); }
+}
+
+function speakPCM(pcmB64, eventId){
+  if(!avatarWs || !wsReady || !pcmB64) return;
+  // PCM 16-bit 24kHz: 48000 bytes = 1 second
+  const raw = atob(pcmB64);
+  const chunkSize = 48000;
+  for(let i=0; i<raw.length; i+=chunkSize){
+    const chunk = raw.slice(i, Math.min(i+chunkSize, raw.length));
+    avatarWs.send(JSON.stringify({type:'agent.speak', audio:btoa(chunk), event_id:eventId}));
+  }
+  avatarWs.send(JSON.stringify({type:'agent.speak_end', event_id:eventId}));
 }
 
 
@@ -270,7 +277,8 @@ async function sendTextDirect(txt){
           }
           avatarMsgEl.querySelector('.t').textContent=fullText;
           document.getElementById('log').scrollTop=99999;
-          if(chunk.audio) await playMp3Promise('data:audio/mpeg;base64,'+chunk.audio);
+          if(chunk.pcm) speakPCM(chunk.pcm, 'ev_'+Date.now());
+          if(chunk.audio) await playWavPromise('data:audio/wav;base64,'+chunk.audio);
         }catch(e){}
       }
     }
@@ -285,7 +293,7 @@ async function sendText(){
   await sendTextDirect(txt);
 }
 
-function playMp3Promise(src){
+function playWavPromise(src){
   return new Promise(res=>{ const a=new Audio(src); a.onended=res; a.onerror=res; a.play().catch(res); });
 }
 
