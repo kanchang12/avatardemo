@@ -9,6 +9,7 @@
 :root{--bg:#0a0a0f;--panel:#0f0f1a;--line:#1e1e2e;--line2:#2e2e4e;--accent:#a78bfa;--accent2:#7c3aed;--green:#4ade80;--red:#f87171;--muted:#8a8aa0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff;min-height:100vh}
 
+/* ── gate ── */
 #gate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:32px;
   background:radial-gradient(ellipse at center,#1a1a2e 0%,#0a0a0f 70%)}
 #gate h1{font-size:2.2rem;letter-spacing:3px;color:var(--accent);margin-bottom:8px;text-align:center}
@@ -26,21 +27,26 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 .btn-p:hover{background:var(--accent2)}
 .btn-p:disabled{background:var(--line2);color:#555;cursor:not-allowed}
 
+/* ── talk screen ── */
 #talk{display:none;flex-direction:column;height:100vh}
 .nav{display:flex;align-items:center;gap:12px;padding:13px 22px;border-bottom:1px solid var(--line);flex-shrink:0}
 .nav h2{color:var(--accent);font-size:1rem;letter-spacing:2px}
 .nav .who{margin-left:auto;font-size:.82rem;color:var(--muted)}
 .nav button{background:transparent;border:1px solid var(--line2);color:var(--muted);padding:6px 14px;border-radius:16px;cursor:pointer;font-size:.8rem}
 .body{display:flex;flex:1;overflow:hidden}
-.stage{flex:1;background:#0a0a0f;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0}
-.avatar-wrap{position:relative;width:100%;height:100%;overflow:hidden;outline:4px solid transparent;outline-offset:-4px;transition:outline-color .3s}
-.avatar-wrap.talking{outline-color:var(--green);box-shadow:inset 0 0 60px 12px rgba(74,222,128,.25);animation:pulse 1.4s ease-in-out infinite}
-@keyframes pulse{50%{box-shadow:inset 0 0 90px 20px rgba(74,222,128,.4)}}
-.avatar-wrap img{width:100%;height:100%;object-fit:cover;object-position:50% 25%;display:block}
-.avatar-wrap video{width:100%;height:100%;object-fit:cover;display:none}
-.stage-name{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);font-size:.95rem;color:#cfcfe6;letter-spacing:1px}
+
+/* ── avatar stage ── */
+.stage{flex:1;background:#0a0a0f;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#avatarImg{width:100%;height:100%;object-fit:contain;object-position:center center;display:block}
+#avatarVid{width:100%;height:100%;object-fit:contain;object-position:center center;display:none}
+.stage-name{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);font-size:.95rem;color:#cfcfe6;letter-spacing:1px;background:rgba(0,0,0,.4);padding:4px 14px;border-radius:20px}
 .voicewarn{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#2a1010;border:1px solid var(--red);color:#fca5a5;
-  font-size:.74rem;padding:6px 12px;border-radius:10px;display:none;max-width:90%;text-align:center}
+  font-size:.74rem;padding:6px 12px;border-radius:10px;display:none;max-width:90%;text-align:center;z-index:10}
+.status-badge{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);font-size:.78rem;color:var(--green);
+  background:rgba(0,0,0,.5);padding:4px 12px;border-radius:20px;display:none}
+.status-badge.on{display:block}
+
+/* ── side panel ── */
 .side{width:380px;border-left:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0}
 .log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
 .m{font-size:.92rem;line-height:1.6}
@@ -57,7 +63,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 .send{background:var(--accent)}.send:disabled{background:var(--line2);color:#555}
 .mic{background:#15151f;border:1px solid var(--line2)!important}
 .mic.rec{background:var(--red);border-color:var(--red)!important}
-@media(max-width:760px){.body{flex-direction:column}.side{width:100%;border-left:none;border-top:1px solid var(--line)}.stage{height:55vh}}
+@media(max-width:760px){.body{flex-direction:column}.side{width:100%;border-left:none;border-top:1px solid var(--line)}.stage{height:50vh}}
 </style>
 </head>
 <body>
@@ -78,75 +84,54 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
   <div class="nav">
     <h2>DIGITAL TWIN</h2>
     <span class="who" id="whoLabel"></span>
-    <button onclick="location.reload()">Leave</button>
+    <button onclick="leaveSession()">Leave</button>
   </div>
   <div class="body">
     <div class="stage">
       <div class="voicewarn" id="voicewarn"></div>
-      <div class="avatar-wrap" id="avatarWrap"><img id="avatarImg" src="/avatar/thumbnail" alt="avatar" onerror="this.style.opacity=.2"><video id="avatarVid" autoplay playsinline></video></div>
+      <img id="avatarImg" src="/avatar/thumbnail" alt="avatar">
+      <video id="avatarVid" autoplay playsinline></video>
       <div class="stage-name" id="stageName"></div>
+      <div class="status-badge" id="statusBadge"></div>
     </div>
     <div class="side">
       <div class="log" id="log"></div>
-      <div class="listening-bar" id="listenBar"><span class="dot"></span> Listening… speak now</div>
+      <div class="listening-bar" id="listenBar"><span class="dot"></span> Listening…</div>
       <div class="composer">
-        <button class="mic" id="micBtn" title="Hold a conversation by voice">🎙</button>
-        <input id="msgInp" placeholder="Type, or tap the mic to speak…" onkeydown="if(event.key==='Enter')sendMsg()">
-        <button class="send" id="sendBtn" onclick="sendMsg()">↑</button>
+        <button class="mic" id="micBtn" title="Voice conversation">🎙</button>
+        <input id="msgInp" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendText()">
+        <button class="send" id="sendBtn" onclick="sendText()">↑</button>
       </div>
     </div>
   </div>
 </div>
 
-<audio id="player"></audio>
+<!-- LiveAvatar Web SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/dist/index.umd.js"></script>
 
 <script>
-let gateStream=null, sessionId=null, handsFree=false;
-
-/* ── shared speech: ElevenLabs audio, else browser voice (always talks) ── */
-function speak(b64, text, videoUrl){
-  const wrap=document.getElementById('avatarWrap');
-  const img=document.getElementById('avatarImg');
-  const vid=document.getElementById('avatarVid');
-  const done=()=>{ wrap.classList.remove('talking'); vid.style.display='none'; img.style.display='block'; if(handsFree) startListening(); };
-  wrap.classList.add('talking');
-  if(videoUrl){
-    img.style.display='none'; vid.style.display='block';
-    vid.src=videoUrl; vid.onended=done; vid.onerror=done;
-    vid.play().catch(done);
-    return;
-  }
-  if(b64){
-    const p=document.getElementById('player'); p.src='data:audio/mpeg;base64,'+b64;
-    p.onended=done; p.onerror=()=>browserSpeak(text,done);
-    p.play().catch(()=>browserSpeak(text,done));
-  } else { browserSpeak(text,done); }
-}
-function browserSpeak(text, done){
-  if(!('speechSynthesis' in window)){ done(); return; }
-  const u=new SpeechSynthesisUtterance(text); u.rate=1; u.onend=done; u.onerror=done;
-  window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
-}
-function showVoiceWarn(err){
-  if(!err) return;
-  const w=document.getElementById('voicewarn');
-  w.textContent='Cloned voice not active ('+err+') — using a temporary browser voice. Set a real ElevenLabs voice ID to fix.';
-  w.style.display='block';
-}
+let gateStream = null;
+let liveSession = null;
+let laSessionId = null;
 
 /* ── gate ── */
 async function startGateCam(){
-  try{ gateStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
-    document.getElementById('gateCam').srcObject=gateStream; }
-  catch(e){ hint('Camera needed to recognise you. Allow access and reload.',true); }
+  try{
+    gateStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
+    document.getElementById('gateCam').srcObject = gateStream;
+  } catch(e){ hint('Camera needed to recognise you. Allow access and reload.', true); }
 }
 startGateCam();
-function hint(t,err){ const h=document.getElementById('gateHint'); h.textContent=t; h.className='gate-hint'+(err?' err':''); }
-function snap(){ const v=document.getElementById('gateCam'); const c=document.createElement('canvas');
-  c.width=v.videoWidth||320; c.height=v.videoHeight||240; c.getContext('2d').drawImage(v,0,0,c.width,c.height);
-  return c.toDataURL('image/jpeg',0.85); }
 
-document.getElementById('enterBtn').onclick=async ()=>{
+function hint(t, err){ const h=document.getElementById('gateHint'); h.textContent=t; h.className='gate-hint'+(err?' err':''); }
+function snap(){
+  const v=document.getElementById('gateCam'); const c=document.createElement('canvas');
+  c.width=v.videoWidth||320; c.height=v.videoHeight||240;
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',0.85);
+}
+
+document.getElementById('enterBtn').onclick = async () => {
   const btn=document.getElementById('enterBtn');
   const pw=document.getElementById('pwInp').value.trim(), name=document.getElementById('nameInp').value.trim();
   btn.disabled=true; hint('Looking…');
@@ -157,7 +142,7 @@ document.getElementById('enterBtn').onclick=async ()=>{
       hint('New here — pick a name and password, then press again.'); btn.disabled=false; return; }
     if(d.error){ hint(d.error,true); btn.disabled=false; return; }
     enterTalk(d);
-  }catch(e){ hint('Something went wrong. Try again.',true); btn.disabled=false; }
+  } catch(e){ hint('Something went wrong. Try again.',true); btn.disabled=false; }
 };
 
 async function enterTalk(d){
@@ -165,47 +150,163 @@ async function enterTalk(d){
   document.getElementById('gate').style.display='none';
   document.getElementById('talk').style.display='flex';
   document.getElementById('whoLabel').textContent=(d.returning?'Welcome back, ':'Hello, ')+d.name;
-  (d.history||[]).forEach(m=>addMsg(m.speaker==='avatar'?'avatar':'user',m.text));
-  const sd=await (await fetch('/u/session',{method:'POST'})).json();
-  sessionId=sd.session_id;
-  document.getElementById('stageName').textContent=sd.customer_name||'';
-  showVoiceWarn(sd.voice_error);
-  if(sd.greeting){ addMsg('avatar',sd.greeting); speak(sd.greeting_audio, sd.greeting, sd.greeting_video); }
+  (d.history||[]).forEach(m=>addMsg(m.speaker==='avatar'?'avatar':'user', m.text));
+
+  // register session in DB
+  const sd = await (await fetch('/u/session',{method:'POST'})).json();
+  document.getElementById('stageName').textContent = sd.customer_name || '';
+
+  // start LiveAvatar session
+  await startLiveAvatar(sd);
 }
 
+/* ── LiveAvatar ── */
+async function startLiveAvatar(sd){
+  const img = document.getElementById('avatarImg');
+  const vid = document.getElementById('avatarVid');
+  const badge = document.getElementById('statusBadge');
+
+  try{
+    // get session token from our backend
+    const tr = await (await fetch('/u/liveavatar_token',{method:'POST'})).json();
+    if(tr.error){
+      showWarn('LiveAvatar unavailable: '+tr.error+' — using text mode.');
+      // fallback: play greeting via ElevenLabs audio
+      if(sd.greeting){ addMsg('avatar',sd.greeting); playAudio(sd.greeting_audio, sd.greeting); }
+      return;
+    }
+    laSessionId = tr.session_id;
+
+    // init LiveAvatar SDK
+    const LA = window.LiveAvatar || window.liveavatar;
+    liveSession = new LA.StreamingAvatar({ token: tr.session_token });
+
+    liveSession.on('avatar_start_talking', () => {
+      img.style.display='none'; vid.style.display='block';
+      badge.textContent='● Speaking'; badge.className='status-badge on';
+    });
+    liveSession.on('avatar_stop_talking', () => {
+      vid.style.display='none'; img.style.display='block';
+      badge.className='status-badge';
+    });
+    liveSession.on('user_start', () => {
+      document.getElementById('listenBar').classList.add('on');
+    });
+    liveSession.on('user_stop', () => {
+      document.getElementById('listenBar').classList.remove('on');
+    });
+    liveSession.on('stream_ready', (stream) => {
+      vid.srcObject = stream;
+    });
+    liveSession.on('agent_response', (e) => {
+      const text = e?.data?.text || e?.text || '';
+      if(text) addMsg('avatar', text);
+    });
+    liveSession.on('user_transcription', (e) => {
+      const text = e?.data?.text || e?.text || '';
+      if(text) addMsg('user', text);
+    });
+    liveSession.on('error', (e) => {
+      showWarn('LiveAvatar error: '+JSON.stringify(e));
+    });
+
+    await liveSession.createAndStartSession({
+      quality: 'high',
+      avatarName: laSessionId
+    });
+
+    badge.textContent='Connected'; badge.className='status-badge on';
+    setTimeout(()=>{ badge.className='status-badge'; }, 2000);
+
+    // send greeting text as first message
+    if(sd.greeting){
+      addMsg('avatar', sd.greeting);
+      await liveSession.speak({ text: sd.greeting });
+    }
+
+    // wire up mic button for voice
+    wireMic();
+
+  } catch(e){
+    showWarn('LiveAvatar failed: '+e.message+' — using text mode.');
+    if(sd.greeting){ addMsg('avatar',sd.greeting); playAudio(sd.greeting_audio, sd.greeting); }
+  }
+}
+
+/* ── voice mic (hands-free with LiveAvatar) ── */
+function wireMic(){
+  const micBtn = document.getElementById('micBtn');
+  if(!liveSession){ micBtn.style.display='none'; return; }
+  let voiceActive = false;
+  micBtn.onclick = async () => {
+    if(!voiceActive){
+      await liveSession.startVoiceChat({ useSilenceDetection: true });
+      voiceActive = true;
+      micBtn.classList.add('rec');
+    } else {
+      await liveSession.closeVoiceChat();
+      voiceActive = false;
+      micBtn.classList.remove('rec');
+    }
+  };
+}
+
+/* ── text message (fallback / typed input) ── */
+async function sendText(){
+  const inp = document.getElementById('msgInp');
+  const txt = inp.value.trim(); if(!txt) return;
+  inp.value=''; addMsg('user', txt);
+  document.getElementById('sendBtn').disabled=true;
+
+  if(liveSession){
+    // send via LiveAvatar elevenlabs_agent_command
+    try{
+      await liveSession.sendMessage({ text: txt });
+    } catch(e){
+      addMsg('avatar','(voice error — '+e.message+')');
+    }
+  } else {
+    // pure text fallback via Flask
+    try{
+      const d=await (await fetch('/u/talk',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({text:txt})})).json();
+      if(d.error) addMsg('avatar','(error: '+d.error+')');
+      else{ addMsg('avatar',d.reply); playAudio(d.audio,d.reply); }
+    } catch(e){ addMsg('avatar','(connection problem)'); }
+  }
+  document.getElementById('sendBtn').disabled=false;
+}
+
+/* ── audio fallback (when LiveAvatar not available) ── */
+function playAudio(b64, text){
+  if(b64){
+    const a=new Audio('data:audio/mpeg;base64,'+b64);
+    a.play().catch(()=>browserSpeak(text));
+  } else browserSpeak(text);
+}
+function browserSpeak(text){
+  if('speechSynthesis' in window){
+    const u=new SpeechSynthesisUtterance(text); window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  }
+}
+
+/* ── leave ── */
+async function leaveSession(){
+  if(liveSession){ try{ await liveSession.stopSession(); }catch(e){} liveSession=null; }
+  location.reload();
+}
+
+/* ── helpers ── */
 function addMsg(role,text){
   const log=document.getElementById('log');
   const el=document.createElement('div'); el.className='m '+role;
   el.innerHTML='<div class="w">'+(role==='avatar'?'Avatar':'You')+'</div><div class="t"></div>';
   el.querySelector('.t').textContent=text; log.appendChild(el); log.scrollTop=log.scrollHeight;
 }
-
-async function sendMsg(){
-  const inp=document.getElementById('msgInp'); const txt=inp.value.trim(); if(!txt) return;
-  inp.value=''; addMsg('user',txt); document.getElementById('sendBtn').disabled=true;
-  try{
-    const d=await (await fetch('/u/talk',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:txt,session_id:sessionId})})).json();
-    if(d.error){ addMsg('avatar','(error: '+d.error+')'); }
-    else{ addMsg('avatar',d.reply); showVoiceWarn(d.voice_error); speak(d.audio,d.reply,d.video); }
-  }catch(e){ addMsg('avatar','(connection problem)'); }
-  document.getElementById('sendBtn').disabled=false;
+function showWarn(msg){
+  const w=document.getElementById('voicewarn'); w.textContent=msg; w.style.display='block';
+  setTimeout(()=>w.style.display='none', 6000);
 }
-
-/* ── hands-free voice conversation ── */
-let recog=null, listening=false;
-const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-const micBtn=document.getElementById('micBtn'), listenBar=document.getElementById('listenBar');
-if(SR){
-  recog=new SR(); recog.continuous=false; recog.interimResults=true; recog.lang='en-US';
-  recog.onresult=e=>{ let t=''; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript;
-    document.getElementById('msgInp').value=t; };
-  recog.onend=()=>{ listening=false; micBtn.classList.remove('rec'); listenBar.classList.remove('on');
-    if(document.getElementById('msgInp').value.trim()) sendMsg(); };
-  micBtn.onclick=()=>{ handsFree=!handsFree; if(handsFree) startListening(); else stopListening(); };
-}else{ micBtn.style.display='none'; }
-function startListening(){ if(!recog||listening) return; try{ listening=true; micBtn.classList.add('rec'); listenBar.classList.add('on'); recog.start(); }catch(e){ listening=false; } }
-function stopListening(){ if(recog&&listening){ recog.stop(); } micBtn.classList.remove('rec'); listenBar.classList.remove('on'); }
 </script>
 </body>
 </html>
