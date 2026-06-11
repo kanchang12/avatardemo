@@ -229,20 +229,7 @@ async function startLiveAvatar(){
   } catch(e){ showWarn('LiveAvatar: '+e.message); fallback(); }
 }
 
-/* ── send PCM audio to LiveAvatar to drive lip sync ── */
-function speakPCM(pcmB64){
-  if(!avatarWs || !wsReady) return;
-  const eventId='ev_'+Date.now();
-  // send in chunks (~1 second = 48000 bytes at PCM 24kHz 16-bit)
-  const bytes=atob(pcmB64);
-  const chunkSize=48000;
-  for(let i=0;i<bytes.length;i+=chunkSize){
-    const chunk=bytes.slice(i,Math.min(i+chunkSize,bytes.length));
-    const b64chunk=btoa(chunk);
-    avatarWs.send(JSON.stringify({type:'agent.speak',audio:b64chunk,event_id:eventId}));
-  }
-  avatarWs.send(JSON.stringify({type:'agent.speak_end',event_id:eventId}));
-}
+
 
 /* ── send text, get reply ── */
 async function sendText(){
@@ -250,17 +237,41 @@ async function sendText(){
   const txt=inp.value.trim(); if(!txt) return;
   inp.value=''; addMsg('user',txt);
   document.getElementById('sendBtn').disabled=true;
+
+  let avatarMsgEl=null, fullText='';
   try{
-    const d=await(await fetch('/u/talk',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:txt})})).json();
-    if(d.reply){
-      addMsg('avatar',d.reply);
-      if(d.pcm_audio && wsReady) speakPCM(d.pcm_audio);
-      else if(d.audio) playMp3(d.audio, d.reply);
-      else browserSpeak(d.reply);
+    const resp=await fetch('/u/talk_stream',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt})});
+    const reader=resp.body.getReader(), dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const {done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n'); buf=lines.pop();
+      for(const line of lines){
+        if(!line.trim()) continue;
+        try{
+          const chunk=JSON.parse(line);
+          if(chunk.error){ addMsg('avatar','('+chunk.error+')'); continue; }
+          fullText+=(fullText?' ':'')+chunk.text;
+          if(!avatarMsgEl){
+            avatarMsgEl=document.createElement('div');
+            avatarMsgEl.className='m avatar';
+            avatarMsgEl.innerHTML='<div class="w">Avatar</div><div class="t"></div>';
+            document.getElementById('log').appendChild(avatarMsgEl);
+          }
+          avatarMsgEl.querySelector('.t').textContent=fullText;
+          document.getElementById('log').scrollTop=99999;
+          if(chunk.audio) await playMp3Promise('data:audio/mpeg;base64,'+chunk.audio);
+        }catch(e){}
+      }
     }
-  } catch(e){ addMsg('avatar','(error)'); }
+  }catch(e){ addMsg('avatar','(connection error)'); }
   document.getElementById('sendBtn').disabled=false;
+}
+
+function playMp3Promise(src){
+  return new Promise(res=>{ const a=new Audio(src); a.onended=res; a.onerror=res; a.play().catch(res); });
 }
 
 /* ── leave ── */
