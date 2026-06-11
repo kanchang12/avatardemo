@@ -367,27 +367,15 @@ def elevenlabs_tts(text, voice_id=None):
 # ── LiveAvatar session token ──────────────────────────────────────────────────
 
 def liveavatar_start():
-    """Create LITE token + start session using Gemini Live connector.
-    Returns livekit_url, livekit_token, ws_url, session_id, error."""
+    """Create LITE token + start session. Returns livekit_url, livekit_token, ws_url, session_id, error."""
     if not LIVEAVATAR_API_KEY or not LIVEAVATAR_AVATAR_ID:
         return None, None, None, None, "Missing LIVEAVATAR_API_KEY or LIVEAVATAR_AVATAR_ID"
-    if not LIVEAVATAR_GEMINI_SECRET_ID:
-        return None, None, None, None, "Missing LIVEAVATAR_GEMINI_SECRET_ID"
     try:
-        # Step 1: create LITE session token with Gemini Live connector
+        # Step 1: create LITE session token - no connector, we drive audio ourselves
         r = requests.post(
             "https://api.liveavatar.com/v1/sessions/token",
             headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
-            json={
-                "mode": "LITE",
-                "avatar_id": LIVEAVATAR_AVATAR_ID,
-                "gemini_realtime_config": {
-                    "secret_id": LIVEAVATAR_GEMINI_SECRET_ID,
-                    "voice": "Puck",
-                    "model": "gemini-3.1-flash-live-preview",
-                    "temperature": 0.8
-                }
-            },
+            json={"mode": "LITE", "avatar_id": LIVEAVATAR_AVATAR_ID},
             timeout=30
         )
         if r.status_code != 200:
@@ -410,6 +398,28 @@ def liveavatar_start():
         return None, None, None, None, f"LiveAvatar exception: {e}"
 
 
+
+# ── ElevenLabs PCM 24kHz for LiveAvatar lip sync ─────────────────────────────
+
+def elevenlabs_tts_pcm(text, voice_id=None):
+    """Returns raw PCM 16-bit 24kHz audio as bytes, for LiveAvatar agent.speak."""
+    vid = (voice_id or ELEVENLABS_VOICE_ID or "").strip()
+    if not ELEVENLABS_API_KEY or not vid:
+        return None
+    try:
+        r = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{vid}/stream",
+            headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+            json={"text": text, "model_id": "eleven_turbo_v2_5",
+                  "output_format": "pcm_24000",
+                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}},
+            timeout=15, stream=True
+        )
+        if r.status_code == 200:
+            return b"".join(r.iter_content(4096))
+    except Exception as e:
+        app.logger.error(f"PCM TTS error: {e}")
+    return None
 
 # ── face recognition (identity gate) ─────────────────────────────────────────────
 
@@ -624,12 +634,12 @@ Use ONLY the knowledge below. Keep replies 1-3 SHORT spoken sentences. Be concis
                     buf = buf[last_space+1:]
                     flush = True; word_count = 0
                 if flush and flush_text:
-                    audio_b64 = _tts_sentence(flush_text, voice_id)
-                    yield _json.dumps({"text": flush_text, "audio": audio_b64}) + "\n"
+                    wav_b64, pcm_b64 = _tts_sentence(flush_text, voice_id)
+                    yield _json.dumps({"text": flush_text, "audio": wav_b64, "pcm": pcm_b64}) + "\n"
             # flush remainder
             if buf.strip():
-                audio_b64 = _tts_sentence(buf.strip(), voice_id)
-                yield _json.dumps({"text": buf.strip(), "audio": audio_b64}) + "\n"
+                wav_b64, pcm_b64 = _tts_sentence(buf.strip(), voice_id)
+                yield _json.dumps({"text": buf.strip(), "audio": wav_b64, "pcm": pcm_b64}) + "\n"
         except Exception as e:
             yield _json.dumps({"error": str(e)}) + "\n"
             return
@@ -648,22 +658,36 @@ Use ONLY the knowledge below. Keep replies 1-3 SHORT spoken sentences. Be concis
                              "Transfer-Encoding": "chunked"})
 
 def _tts_sentence(text, voice_id):
-    """TTS a single sentence, return base64 mp3 or None."""
+    """TTS a single sentence. Returns (mp3_b64, pcm_b64) tuple."""
     vid = (voice_id or ELEVENLABS_VOICE_ID or "").strip()
-    if not ELEVENLABS_API_KEY or not vid: return None
+    if not ELEVENLABS_API_KEY or not vid: return None, None
     try:
+        # Get PCM for LiveAvatar lip sync
         r = requests.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{vid}/stream",
             headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
             json={"text": text, "model_id": "eleven_turbo_v2_5",
+                  "output_format": "pcm_24000",
                   "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}},
             timeout=15, stream=True
         )
         if r.status_code == 200:
-            return base64.b64encode(b"".join(r.iter_content(4096))).decode()
+            pcm_bytes = b"".join(r.iter_content(4096))
+            # Also encode as mp3-compatible base64 for browser audio fallback
+            # PCM wrapped in WAV header for browser playback
+            import wave, io
+            wav_buf = io.BytesIO()
+            with wave.open(wav_buf, 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)  # 16-bit
+                wf.setframerate(24000)
+                wf.writeframes(pcm_bytes)
+            wav_b64 = base64.b64encode(wav_buf.getvalue()).decode()
+            pcm_b64 = base64.b64encode(pcm_bytes).decode()
+            return wav_b64, pcm_b64
     except Exception as e:
         app.logger.error(f"TTS stream error: {e}")
-    return None
+    return None, None
 
 # ════════════════════════════════ CUSTOMER PORTAL ════════════════════════════
 
