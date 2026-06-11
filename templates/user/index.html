@@ -299,6 +299,8 @@ function playWavPromise(src){
 
 /* ── leave ── */
 async function leaveSession(){
+  // flush conversation to DB before leaving
+  try{ await fetch('/u/end_session',{method:'POST'}); }catch(e){}
   if(avatarWs){ try{ avatarWs.close(); }catch(e){} avatarWs=null; }
   if(livekitRoom){ try{ await livekitRoom.disconnect(); }catch(e){} livekitRoom=null; }
   location.reload();
