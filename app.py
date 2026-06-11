@@ -1,7 +1,7 @@
 import os, uuid, base64, hashlib, json
 import numpy as np
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, send_file, g, session, redirect, url_for
+from flask import stream_with_context, Response, Flask, render_template, request, jsonify, send_file, g, session, redirect, url_for
 from flask_cors import CORS
 import requests
 import psycopg2
@@ -396,27 +396,7 @@ def liveavatar_start():
     except Exception as e:
         return None, None, None, None, f"LiveAvatar exception: {e}"
 
-# ── ElevenLabs PCM 24kHz for LiveAvatar ──────────────────────────────────────
 
-def elevenlabs_tts_pcm(text, voice_id=None):
-    """Returns raw PCM 16-bit 24kHz audio as base64, for LiveAvatar agent.speak."""
-    vid = (voice_id or ELEVENLABS_VOICE_ID or "").strip()
-    if not ELEVENLABS_API_KEY or not vid: return None
-    try:
-        r = requests.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{vid}/stream",
-            headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
-            json={"text": text, "model_id": ELEVENLABS_MODEL,
-                  "output_format": "pcm_24000",
-                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}},
-            timeout=30, stream=True
-        )
-        if r.status_code == 200:
-            raw = b"".join(r.iter_content(chunk_size=4096))
-            return base64.b64encode(raw).decode()
-    except Exception as e:
-        app.logger.error(f"ElevenLabs PCM error: {e}")
-    return None
 
 # ── face recognition (identity gate) ─────────────────────────────────────────────
 
@@ -513,10 +493,8 @@ def user_session():
     ctx = build_context(db, customer["id"], session["user_id"], "greeting hello")
     greeting = gemini_reply(ctx, [], f"(A person named {uname} just arrived. Greet them warmly in one or two sentences.)", uname)
     g_audio, g_err = elevenlabs_tts(greeting, customer.get("voice_id"))
-    g_pcm = elevenlabs_tts_pcm(greeting, customer.get("voice_id")) if ELEVENLABS_API_KEY else None
     return jsonify({"session_id": sid, "customer_name": customer["name"], "greeting": greeting,
-                    "greeting_audio": g_audio, "greeting_pcm": g_pcm,
-                    "voice_error": g_err, "brain_error": _LAST_GEMINI_ERROR})
+                    "greeting_audio": g_audio, "voice_error": g_err, "brain_error": _LAST_GEMINI_ERROR})
 
 @app.route("/u/transcribe", methods=["GET","POST"])
 def u_transcribe():
@@ -557,8 +535,97 @@ def user_talk():
     store_message(db, cid, uid, "avatar", reply, sid)
     db.commit()
     audio, verr = elevenlabs_tts(reply, customer.get("voice_id"))
-    pcm = elevenlabs_tts_pcm(reply, customer.get("voice_id")) if ELEVENLABS_API_KEY else None
-    return jsonify({"reply": reply, "audio": audio, "pcm_audio": pcm, "voice_error": verr, "brain_error": _LAST_GEMINI_ERROR})
+    return jsonify({"reply": reply, "audio": audio, "voice_error": verr, "brain_error": _LAST_GEMINI_ERROR})
+
+@app.route("/u/talk_stream", methods=["GET","POST"])
+def user_talk_stream():
+    """Streaming endpoint: Gemini reply streamed sentence by sentence,
+    each sentence piped to ElevenLabs TTS, audio chunks sent back immediately.
+    Response is newline-delimited JSON chunks."""
+    if "user_id" not in session:
+        return jsonify({"error": "Not identified"}), 401
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "Empty message"}), 400
+    db = get_db(); customer = get_first_customer(db)
+    if not customer:
+        return jsonify({"error": "No active avatar"}), 404
+    cid, uid, sid = customer["id"], session["user_id"], session.get("session_id")
+    voice_id = customer.get("voice_id") or ELEVENLABS_VOICE_ID
+
+    with db.cursor() as cur:
+        cur.execute("SELECT name FROM ava_users WHERE id=%s", (uid,)); row = cur.fetchone()
+        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s ORDER BY timestamp DESC LIMIT 8", (uid,))
+        recent = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(cur.fetchall())]
+    speaker_name = row["name"] if row else "Guest"
+    ctx = build_context(db, cid, uid, text)
+
+    import re, json as _json
+
+    def generate():
+        # Stream Gemini token by token, buffer into sentences
+        convo = "\n".join(f"{m['speaker']}: {m['text']}" for m in recent[-10:])
+        system = f"""You ARE this person, speaking in first person. Stay in character; never say you are an AI.
+Use ONLY the knowledge below. Keep replies 1-4 spoken sentences.
+{ctx or '(Speak warmly.)'}"""
+        prompt = f"Recent:\n{convo}\n\n{speaker_name} just said: \"{text}\"\n\nReply now:"
+
+        cfg = genai_types.GenerateContentConfig(temperature=0.7, system_instruction=system)
+        full_reply = []
+        sentence_buf = ""
+
+        try:
+            for chunk in _genai_client.models.generate_content_stream(
+                model=GEMINI_MODEL, contents=prompt, config=cfg
+            ):
+                piece = chunk.text or ""
+                sentence_buf += piece
+                full_reply.append(piece)
+                # flush on sentence boundary
+                sentences = re.split(r'(?<=[.!?])\s+', sentence_buf)
+                if len(sentences) > 1:
+                    for s in sentences[:-1]:
+                        s = s.strip()
+                        if not s: continue
+                        # TTS this sentence
+                        audio_b64 = _tts_sentence(s, voice_id)
+                        yield _json.dumps({"text": s, "audio": audio_b64}) + "\n"
+                    sentence_buf = sentences[-1]
+            # flush remainder
+            if sentence_buf.strip():
+                audio_b64 = _tts_sentence(sentence_buf.strip(), voice_id)
+                yield _json.dumps({"text": sentence_buf.strip(), "audio": audio_b64}) + "\n"
+        except Exception as e:
+            yield _json.dumps({"error": str(e)}) + "\n"
+            return
+
+        # store full reply in DB
+        full_text = "".join(full_reply).strip()
+        store_message(db, cid, uid, "user", text, sid)
+        store_message(db, cid, uid, "avatar", full_text, sid)
+        db.commit()
+
+    return Response(stream_with_context(generate()), mimetype="text/plain",
+                    headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})
+
+def _tts_sentence(text, voice_id):
+    """TTS a single sentence, return base64 mp3 or None."""
+    vid = (voice_id or ELEVENLABS_VOICE_ID or "").strip()
+    if not ELEVENLABS_API_KEY or not vid: return None
+    try:
+        r = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{vid}/stream",
+            headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+            json={"text": text, "model_id": "eleven_flash_v2_5",
+                  "voice_settings": {"stability": 0.5, "similarity_boost": 0.8}},
+            timeout=15, stream=True
+        )
+        if r.status_code == 200:
+            return base64.b64encode(b"".join(r.iter_content(4096))).decode()
+    except Exception as e:
+        app.logger.error(f"TTS stream error: {e}")
+    return None
 
 # ════════════════════════════════ CUSTOMER PORTAL ════════════════════════════
 
