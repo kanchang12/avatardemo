@@ -8,8 +8,6 @@
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0a0f;--panel:#0f0f1a;--line:#1e1e2e;--line2:#2e2e4e;--accent:#a78bfa;--accent2:#7c3aed;--green:#4ade80;--red:#f87171;--muted:#8a8aa0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff;min-height:100vh}
-
-/* gate */
 #gate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:32px;
   background:radial-gradient(ellipse at center,#1a1a2e 0%,#0a0a0f 70%)}
 #gate h1{font-size:2.2rem;letter-spacing:3px;color:var(--accent);margin-bottom:8px;text-align:center}
@@ -24,18 +22,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 .gate-hint{font-size:.8rem;color:var(--muted);margin:6px 0 14px;min-height:1.1em;line-height:1.5}
 .gate-hint.err{color:var(--red)}
 .btn-p{background:var(--accent);color:#fff;border:none;padding:12px 22px;border-radius:10px;cursor:pointer;font-size:.95rem;font-weight:600;width:100%}
-.btn-p:hover{background:var(--accent2)}
-.btn-p:disabled{background:var(--line2);color:#555;cursor:not-allowed}
-
-/* talk */
+.btn-p:hover{background:var(--accent2)}.btn-p:disabled{background:var(--line2);color:#555;cursor:not-allowed}
 #talk{display:none;flex-direction:column;height:100vh}
 .nav{display:flex;align-items:center;gap:12px;padding:13px 22px;border-bottom:1px solid var(--line);flex-shrink:0}
 .nav h2{color:var(--accent);font-size:1rem;letter-spacing:2px}
 .nav .who{margin-left:auto;font-size:.82rem;color:var(--muted)}
 .nav button{background:transparent;border:1px solid var(--line2);color:var(--muted);padding:6px 14px;border-radius:16px;cursor:pointer;font-size:.8rem}
 .body{display:flex;flex:1;overflow:hidden}
-
-/* stage */
 .stage{flex:1;background:#0a0a0f;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
 #avatarImg{width:100%;height:100%;object-fit:contain;display:block}
 #avatarVid{width:100%;height:100%;object-fit:contain;display:none;background:#000}
@@ -44,26 +37,19 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 .status-badge{position:absolute;top:14px;left:14px;font-size:.75rem;color:var(--green);
   background:rgba(0,0,0,.6);padding:4px 10px;border-radius:20px;display:none}
 .status-badge.on{display:block}
-.voicewarn{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:#2a1010;border:1px solid var(--red);
-  color:#fca5a5;font-size:.74rem;padding:6px 12px;border-radius:10px;display:none;max-width:90%;text-align:center;z-index:10}
-
-/* side */
+.voicewarn{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:#2a1010;
+  border:1px solid var(--red);color:#fca5a5;font-size:.74rem;padding:6px 12px;border-radius:10px;
+  display:none;max-width:90%;text-align:center;z-index:10}
 .side{width:380px;border-left:1px solid var(--line);display:flex;flex-direction:column;flex-shrink:0}
 .log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
 .m .w{font-weight:600;font-size:.74rem;margin-bottom:3px}
 .m.user .w{color:var(--accent)}.m.avatar .w{color:var(--green)}
 .m .t{font-size:.92rem;line-height:1.6;color:#d4d4e0}
-.listenbar{padding:9px 16px;font-size:.8rem;color:var(--green);border-top:1px solid var(--line);display:none;align-items:center;gap:8px}
-.listenbar.on{display:flex}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:bl 1s infinite}
-@keyframes bl{50%{opacity:.3}}
 .composer{padding:13px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center}
 .composer input{flex:1;padding:12px 13px;background:#15151f;border:1px solid var(--line2);border-radius:10px;color:#fff;font-size:.92rem;outline:none}
 .composer input:focus{border-color:var(--accent)}
 .composer button{border:none;color:#fff;width:48px;height:46px;border-radius:10px;cursor:pointer;font-size:1.1rem}
 .send{background:var(--accent)}.send:disabled{background:var(--line2);color:#555}
-.micbtn{background:#15151f;border:1px solid var(--line2)!important}
-.micbtn.rec{background:var(--red)!important;border-color:var(--red)!important}
 @media(max-width:760px){.body{flex-direction:column}.side{width:100%;border-left:none;border-top:1px solid var(--line)}.stage{height:50vh}}
 </style>
 </head>
@@ -97,9 +83,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
     </div>
     <div class="side">
       <div class="log" id="log"></div>
-      <div class="listenbar" id="listenBar"><span class="dot"></span> Listening…</div>
       <div class="composer">
-        <button class="micbtn" id="micBtn">🎙</button>
         <input id="msgInp" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendText()">
         <button class="send" id="sendBtn" onclick="sendText()">↑</button>
       </div>
@@ -107,39 +91,27 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
   </div>
 </div>
 
-<!-- LiveKit CDN client -->
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-
 <script>
-const img = ()=>document.getElementById('avatarImg');
-const vid = ()=>document.getElementById('avatarVid');
-const badge = ()=>document.getElementById('statusBadge');
+let gateStream=null, livekitRoom=null, avatarWs=null, wsReady=false, sdSession=null;
 
-let gateStream=null, livekitRoom=null, sessionId=null, micTrack=null, micActive=false;
-let sdSession=null; // DB session data
-
-/* ── gate cam ── */
-async function startGateCam(){
-  try{
-    gateStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
-    document.getElementById('gateCam').srcObject = gateStream;
-  } catch(e){ hint('Camera needed — allow access and reload.',true); }
-}
-startGateCam();
+/* ── gate ── */
+navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false})
+  .then(s=>{ gateStream=s; document.getElementById('gateCam').srcObject=s; })
+  .catch(()=>hint('Camera needed — allow access and reload.',true));
 
 function hint(t,err){ const h=document.getElementById('gateHint'); h.textContent=t; h.className='gate-hint'+(err?' err':''); }
 function snap(){
   const v=document.getElementById('gateCam');
   const c=document.createElement('canvas'); c.width=v.videoWidth||320; c.height=v.videoHeight||240;
-  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
-  return c.toDataURL('image/jpeg',0.85);
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height); return c.toDataURL('image/jpeg',0.85);
 }
 
 document.getElementById('enterBtn').onclick = async ()=>{
   const btn=document.getElementById('enterBtn');
+  btn.disabled=true; hint('Checking…');
   const pw=document.getElementById('pwInp').value.trim();
   const name=document.getElementById('nameInp').value.trim();
-  btn.disabled=true; hint('Checking…');
   try{
     const d=await(await fetch('/u/identify',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({image:snap(),password:pw,name})})).json();
@@ -150,7 +122,7 @@ document.getElementById('enterBtn').onclick = async ()=>{
   } catch(e){ hint('Error — try again.',true); btn.disabled=false; }
 };
 
-/* ── enter talk screen ── */
+/* ── enter talk ── */
 async function enterTalk(d){
   if(gateStream) gateStream.getTracks().forEach(t=>t.stop());
   document.getElementById('gate').style.display='none';
@@ -158,133 +130,121 @@ async function enterTalk(d){
   document.getElementById('whoLabel').textContent=(d.returning?'Welcome back, ':'Hello, ')+d.name;
   (d.history||[]).forEach(m=>addMsg(m.speaker==='avatar'?'avatar':'user',m.text));
 
-  // register DB session
-  sdSession = await(await fetch('/u/session',{method:'POST'})).json();
+  sdSession=await(await fetch('/u/session',{method:'POST'})).json();
   if(sdSession.customer_name) document.getElementById('stageName').textContent=sdSession.customer_name;
   if(sdSession.greeting) addMsg('avatar',sdSession.greeting);
 
-  // start LiveAvatar
   await startLiveAvatar();
 }
 
-/* ── LiveAvatar via LiveKit ── */
+/* ── LiveAvatar LITE mode ── */
 async function startLiveAvatar(){
   showBadge('Connecting…');
   try{
     const r=await(await fetch('/u/liveavatar_token',{method:'POST'})).json();
-    if(r.error){ showWarn(r.error); fallbackAudio(); return; }
+    if(r.error){ showWarn(r.error); fallback(); return; }
 
-    sessionId=r.session_id;
-    const LivekitClient = window.LivekitClient;
-    livekitRoom = new LivekitClient.Room();
+    // 1. Connect LiveKit room for video track
+    const LK=window.LivekitClient;
+    livekitRoom=new LK.Room();
 
-    livekitRoom.on(LivekitClient.RoomEvent.TrackSubscribed,(track,pub,participant)=>{
-      if(track.kind===LivekitClient.Track.Kind.Video){
-        track.attach(vid());
-        img().style.display='none';
-        vid().style.display='block';
-        showBadge('● Speaking');
+    livekitRoom.on(LK.RoomEvent.TrackSubscribed,(track)=>{
+      if(track.kind===LK.Track.Kind.Video){
+        track.attach(document.getElementById('avatarVid'));
+        document.getElementById('avatarImg').style.display='none';
+        document.getElementById('avatarVid').style.display='block';
       }
-      if(track.kind===LivekitClient.Track.Kind.Audio){
-        track.attach();
-      }
+      if(track.kind===LK.Track.Kind.Audio) track.attach();
     });
 
-    livekitRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed,(track)=>{
-      if(track.kind===LivekitClient.Track.Kind.Video){
-        vid().style.display='none';
-        img().style.display='block';
-        badge().className='status-badge';
+    livekitRoom.on(LK.RoomEvent.TrackUnsubscribed,(track)=>{
+      if(track.kind===LK.Track.Kind.Video){
+        document.getElementById('avatarVid').style.display='none';
+        document.getElementById('avatarImg').style.display='block';
+        document.getElementById('statusBadge').className='status-badge';
       }
-    });
-
-    livekitRoom.on(LivekitClient.RoomEvent.DataReceived,(data,participant,kind,topic)=>{
-      try{
-        const msg=JSON.parse(new TextDecoder().decode(data));
-        if(msg.event_type==='elevenlabs_agent_event'){
-          const et=msg.elevenlabs_event_type, d=msg.data||{};
-          if(et==='agent_response' && d.agent_response_event?.agent_response)
-            addMsg('avatar',d.agent_response_event.agent_response);
-          if(et==='user_transcript' && d.user_transcription_event?.user_transcript)
-            addMsg('user',d.user_transcription_event.user_transcript);
-        }
-        if(msg.event_type==='avatar.speak_started'){ showBadge('● Speaking'); }
-        if(msg.event_type==='avatar.speak_ended'){ badge().className='status-badge'; }
-        if(msg.event_type==='user.speak_started'){ document.getElementById('listenBar').classList.add('on'); }
-        if(msg.event_type==='user.speak_ended'){ document.getElementById('listenBar').classList.remove('on'); }
-      } catch(e){}
-    });
-
-    livekitRoom.on(LivekitClient.RoomEvent.Disconnected,()=>{
-      vid().style.display='none'; img().style.display='block'; badge().className='status-badge';
     });
 
     await livekitRoom.connect(r.livekit_url, r.livekit_token, {autoSubscribe:true});
-    // publish mic
-    await livekitRoom.localParticipant.setMicrophoneEnabled(true);
-    micActive=true; document.getElementById('micBtn').classList.add('rec');
 
-    showBadge('Connected'); setTimeout(()=>badge().className='status-badge',2000);
+    // 2. Open WebSocket for sending audio commands
+    avatarWs=new WebSocket(r.ws_url);
+    avatarWs.onmessage=(e)=>{
+      try{
+        const msg=JSON.parse(e.data);
+        if(msg.type==='session.state_updated' && msg.state==='connected'){
+          wsReady=true;
+          showBadge('Connected'); setTimeout(()=>document.getElementById('statusBadge').className='status-badge',2000);
+          // play greeting
+          if(sdSession?.greeting_pcm) speakPCM(sdSession.greeting_pcm);
+          else if(sdSession?.greeting_audio) playMp3(sdSession.greeting_audio, sdSession.greeting);
+        }
+        if(msg.type==='agent.speak_started'){
+          document.getElementById('avatarImg').style.display='none';
+          document.getElementById('avatarVid').style.display='block';
+          showBadge('● Speaking');
+        }
+        if(msg.type==='agent.speak_ended'){
+          document.getElementById('statusBadge').className='status-badge';
+        }
+      } catch(e){}
+    };
+    avatarWs.onerror=()=>{ showWarn('WebSocket error'); fallback(); };
+    avatarWs.onclose=()=>{ wsReady=false; };
 
-    // greet via audio fallback if no video yet
-    if(sdSession?.greeting_audio) playAudio(sdSession.greeting_audio, sdSession.greeting);
+  } catch(e){ showWarn('LiveAvatar: '+e.message); fallback(); }
+}
 
-    wireMicBtn();
-
-  } catch(e){
-    showWarn('LiveAvatar: '+e.message);
-    fallbackAudio();
+/* ── send PCM audio to LiveAvatar to drive lip sync ── */
+function speakPCM(pcmB64){
+  if(!avatarWs || !wsReady) return;
+  const eventId='ev_'+Date.now();
+  // send in chunks (~1 second = 48000 bytes at PCM 24kHz 16-bit)
+  const bytes=atob(pcmB64);
+  const chunkSize=48000;
+  for(let i=0;i<bytes.length;i+=chunkSize){
+    const chunk=bytes.slice(i,Math.min(i+chunkSize,bytes.length));
+    const b64chunk=btoa(chunk);
+    avatarWs.send(JSON.stringify({type:'agent.speak',audio:b64chunk,event_id:eventId}));
   }
+  avatarWs.send(JSON.stringify({type:'agent.speak_end',event_id:eventId}));
 }
 
-function wireMicBtn(){
-  document.getElementById('micBtn').onclick = async ()=>{
-    if(!livekitRoom) return;
-    micActive=!micActive;
-    await livekitRoom.localParticipant.setMicrophoneEnabled(micActive);
-    document.getElementById('micBtn').classList.toggle('rec',micActive);
-  };
-}
-
-/* ── text send ── */
+/* ── send text, get reply ── */
 async function sendText(){
   const inp=document.getElementById('msgInp');
   const txt=inp.value.trim(); if(!txt) return;
   inp.value=''; addMsg('user',txt);
   document.getElementById('sendBtn').disabled=true;
-
-  if(livekitRoom && livekitRoom.state==='connected'){
-    // send via LiveKit data channel as elevenlabs_agent_command
-    const cmd=JSON.stringify({event_type:'elevenlabs_agent_command',elevenlabs_event_type:'user_message',data:{text:txt}});
-    await livekitRoom.localParticipant.publishData(new TextEncoder().encode(cmd),{topic:'agent-control',reliable:true});
-  } else {
-    // text fallback via Flask
-    try{
-      const d=await(await fetch('/u/talk',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({text:txt})})).json();
-      if(d.reply){ addMsg('avatar',d.reply); playAudio(d.audio,d.reply); }
-    } catch(e){ addMsg('avatar','(error)'); }
-  }
+  try{
+    const d=await(await fetch('/u/talk',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:txt})})).json();
+    if(d.reply){
+      addMsg('avatar',d.reply);
+      if(d.pcm_audio && wsReady) speakPCM(d.pcm_audio);
+      else if(d.audio) playMp3(d.audio, d.reply);
+      else browserSpeak(d.reply);
+    }
+  } catch(e){ addMsg('avatar','(error)'); }
   document.getElementById('sendBtn').disabled=false;
 }
 
 /* ── leave ── */
 async function leaveSession(){
+  if(avatarWs){ try{ avatarWs.close(); }catch(e){} avatarWs=null; }
   if(livekitRoom){ try{ await livekitRoom.disconnect(); }catch(e){} livekitRoom=null; }
   location.reload();
 }
 
-/* ── fallback audio ── */
-function fallbackAudio(){
-  if(sdSession?.greeting){ playAudio(sdSession.greeting_audio, sdSession.greeting); }
+/* ── fallback ── */
+function fallback(){
+  if(sdSession?.greeting_audio) playMp3(sdSession.greeting_audio, sdSession.greeting);
 }
-function playAudio(b64,text){
+function playMp3(b64,text){
   if(b64){ const a=new Audio('data:audio/mpeg;base64,'+b64); a.play().catch(()=>browserSpeak(text)); }
   else browserSpeak(text);
 }
-function browserSpeak(text){
-  if('speechSynthesis' in window){ const u=new SpeechSynthesisUtterance(text); window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }
-}
+function browserSpeak(t){ if('speechSynthesis' in window){ const u=new SpeechSynthesisUtterance(t); window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } }
 
 /* ── helpers ── */
 function addMsg(role,text){
@@ -293,8 +253,8 @@ function addMsg(role,text){
   el.innerHTML='<div class="w">'+(role==='avatar'?'Avatar':'You')+'</div><div class="t"></div>';
   el.querySelector('.t').textContent=text; log.appendChild(el); log.scrollTop=log.scrollHeight;
 }
-function showBadge(t){ const b=badge(); b.textContent=t; b.className='status-badge on'; }
-function showWarn(msg){ const w=document.getElementById('voicewarn'); w.textContent=msg; w.style.display='block'; setTimeout(()=>w.style.display='none',6000); }
+function showBadge(t){ const b=document.getElementById('statusBadge'); b.textContent=t; b.className='status-badge on'; }
+function showWarn(m){ const w=document.getElementById('voicewarn'); w.textContent=m; w.style.display='block'; setTimeout(()=>w.style.display='none',6000); }
 </script>
 </body>
 </html>
