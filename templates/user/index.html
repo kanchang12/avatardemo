@@ -181,14 +181,13 @@ async function enterTalk(d){
   await startLiveAvatar();
 }
 
-/* ── LiveAvatar LITE mode ── */
+/* ── LiveAvatar LITE mode — Gemini Live connector ── */
 async function startLiveAvatar(){
   showBadge('Connecting…');
   try{
     const r=await(await fetch('/u/liveavatar_token',{method:'POST'})).json();
-    if(r.error){ showWarn(r.error); fallback(); return; }
+    if(r.error){ showWarn('LiveAvatar: '+r.error); fallback(); return; }
 
-    // 1. Connect LiveKit room for video track
     const LK=window.LivekitClient;
     livekitRoom=new LK.Room();
 
@@ -197,8 +196,11 @@ async function startLiveAvatar(){
         track.attach(document.getElementById('avatarVid'));
         document.getElementById('avatarImg').style.display='none';
         document.getElementById('avatarVid').style.display='block';
+        showBadge('● Live');
       }
-      if(track.kind===LK.Track.Kind.Audio) track.attach();
+      if(track.kind===LK.Track.Kind.Audio){
+        track.attach(); // play avatar audio
+      }
     });
 
     livekitRoom.on(LK.RoomEvent.TrackUnsubscribed,(track)=>{
@@ -209,29 +211,30 @@ async function startLiveAvatar(){
       }
     });
 
-    await livekitRoom.connect(r.livekit_url, r.livekit_token, {autoSubscribe:true});
-
-    // 2. Open WebSocket for sending audio commands
-    avatarWs=new WebSocket(r.ws_url);
-    avatarWs.onmessage=(e)=>{
+    // Transcriptions from Gemini Live via data channel
+    livekitRoom.on(LK.RoomEvent.DataReceived,(data)=>{
       try{
-        const msg=JSON.parse(e.data);
-        if(msg.type==='session.state_updated' && msg.state==='connected'){
-          wsReady=true;
-          showBadge('Connected'); setTimeout(()=>document.getElementById('statusBadge').className='status-badge',2000);
-        }
-        if(msg.type==='agent.speak_started'){
-          document.getElementById('avatarImg').style.display='none';
-          document.getElementById('avatarVid').style.display='block';
-          showBadge('● Speaking');
-        }
-        if(msg.type==='agent.speak_ended'){
-          document.getElementById('statusBadge').className='status-badge';
-        }
-      } catch(e){}
-    };
-    avatarWs.onerror=()=>{ showWarn('WebSocket error'); fallback(); };
-    avatarWs.onclose=()=>{ wsReady=false; };
+        const msg=JSON.parse(new TextDecoder().decode(data));
+        const et=msg.elevenlabs_event_type||msg.event_type||'';
+        if(msg.event_type==='avatar.speak_started') showBadge('● Speaking');
+        if(msg.event_type==='avatar.speak_ended') document.getElementById('statusBadge').className='status-badge';
+        if(msg.event_type==='user.transcription' && msg.text) addMsg('user', msg.text);
+        if(msg.event_type==='avatar.transcription' && msg.text) addMsg('avatar', msg.text);
+      }catch(e){}
+    });
+
+    livekitRoom.on(LK.RoomEvent.Disconnected,()=>{
+      document.getElementById('avatarVid').style.display='none';
+      document.getElementById('avatarImg').style.display='block';
+    });
+
+    await livekitRoom.connect(r.livekit_url, r.livekit_token, {autoSubscribe:true});
+    // publish mic so Gemini Live can hear the user
+    await livekitRoom.localParticipant.setMicrophoneEnabled(true);
+
+    showBadge('Connected'); setTimeout(()=>document.getElementById('statusBadge').className='status-badge',2000);
+    // play greeting audio as fallback while video loads
+    if(sdSession?.greeting_audio) playMp3(sdSession.greeting_audio, sdSession.greeting);
 
   } catch(e){ showWarn('LiveAvatar: '+e.message); fallback(); }
 }
