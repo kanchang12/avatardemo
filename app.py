@@ -27,6 +27,9 @@ LIVEAVATAR_AVATAR_ID= os.getenv("LIVEAVATAR_AVATAR_ID", "")
 LIVEAVATAR_SECRET_ID= os.getenv("LIVEAVATAR_SECRET_ID", "")
 LIVEAVATAR_GEMINI_SECRET_ID = os.getenv("LIVEAVATAR_GEMINI_SECRET_ID", "")  # secret_id from registering ElevenLabs key with LiveAvatar
 ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID", "")   # ElevenLabs Conversational AI agent ID
+# ── In-memory conversation store (loaded at session start, flushed on end) ──
+_CONV_CACHE = {}  # session_id -> {ctx, history, speaker_name, cid, uid, voice_id}
+
 RECORDINGS_DIR      = os.getenv("RECORDINGS_DIR", os.path.join(os.path.dirname(__file__), "recordings"))
 FACE_TOLERANCE      = float(os.getenv("FACE_TOLERANCE", "0.42"))  # tighter = stricter identity gate
 TOPK_SEMANTIC       = int(os.getenv("TOPK_SEMANTIC", "6"))
@@ -505,17 +508,41 @@ def user_session():
     db = get_db(); customer = get_first_customer(db)
     if not customer: return jsonify({"error": "No active avatar found"}), 404
     sid = str(uuid.uuid4())
+    uid = session["user_id"]
+    cid = customer["id"]
     with db.cursor() as cur:
         cur.execute("INSERT INTO ava_sessions (id,customer_id,user_id,session_type,started_at) VALUES (%s,%s,%s,%s,%s)",
-            (sid, customer["id"], session["user_id"], "user_chat", datetime.utcnow().isoformat()))
-        cur.execute("SELECT name FROM ava_users WHERE id=%s", (session["user_id"],))
+            (sid, cid, uid, "user_chat", datetime.utcnow().isoformat()))
+        cur.execute("SELECT name FROM ava_users WHERE id=%s", (uid,))
         urow = cur.fetchone()
+        # Load full history into memory
+        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s AND customer_id=%s ORDER BY timestamp DESC LIMIT 40", (uid, cid))
+        history = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(cur.fetchall())]
     db.commit()
     session["session_id"] = sid
     uname = urow["name"] if urow else "there"
-    ctx = build_context(db, customer["id"], session["user_id"], "greeting hello")
-    greeting = gemini_reply(ctx, [], f"(A person named {uname} just arrived. Greet them warmly in one or two sentences.)", uname)
+
+    # Build context ONCE and cache it in memory
+    ctx = build_context(db, cid, uid, "who is this person greeting")
+    if not ctx:
+        # Standard fallback context if no memories yet
+        ctx = f"You are {customer['name']}. You are warm, friendly, and curious. You don't know this person well yet — invite them to talk."
+
+    _CONV_CACHE[sid] = {
+        "ctx": ctx,
+        "history": history,
+        "speaker_name": uname,
+        "cid": cid,
+        "uid": uid,
+        "voice_id": customer.get("voice_id"),
+        "pending_messages": []  # buffer for DB flush on session end
+    }
+
+    greeting = gemini_reply(ctx, history[-6:], f"(A person named {uname} just arrived. Greet them warmly in one sentence.)", uname)
     g_audio, g_err = elevenlabs_tts(greeting, customer.get("voice_id"))
+    # Add greeting to in-memory history
+    _CONV_CACHE[sid]["history"].append({"speaker": "avatar", "text": greeting})
+    _CONV_CACHE[sid]["pending_messages"].append(("avatar", greeting))
     return jsonify({"session_id": sid, "customer_name": customer["name"], "greeting": greeting,
                     "greeting_audio": g_audio, "voice_error": g_err, "brain_error": _LAST_GEMINI_ERROR})
 
@@ -569,46 +596,51 @@ def user_talk():
 
 @app.route("/u/talk_stream", methods=["GET","POST"])
 def user_talk_stream():
-    """Streaming endpoint: Gemini reply streamed sentence by sentence,
-    each sentence piped to ElevenLabs TTS, audio chunks sent back immediately.
-    Response is newline-delimited JSON chunks."""
+    """Streaming endpoint using in-memory context. No DB per turn."""
     if "user_id" not in session:
         return jsonify({"error": "Not identified"}), 401
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
     if not text:
         return jsonify({"error": "Empty message"}), 400
-    db = get_db(); customer = get_first_customer(db)
-    if not customer:
-        return jsonify({"error": "No active avatar"}), 404
-    cid, uid, sid = customer["id"], session["user_id"], session.get("session_id")
-    voice_id = customer.get("voice_id") or ELEVENLABS_VOICE_ID
 
-    with db.cursor() as cur:
-        cur.execute("SELECT name FROM ava_users WHERE id=%s", (uid,)); row = cur.fetchone()
-        cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s AND customer_id=%s ORDER BY timestamp DESC LIMIT 16", (uid, cid))
-        recent = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(cur.fetchall())]
-    speaker_name = row["name"] if row else "Guest"
-    ctx = build_context(db, cid, uid, text)
+    sid = session.get("session_id")
+    cache = _CONV_CACHE.get(sid)
 
-    # Store user message immediately so next turn has history
-    try:
-        store_message(db, cid, uid, "user", text, sid)
-        db.commit()
-    except Exception as e:
-        app.logger.error(f"pre-store error: {e}")
+    if not cache:
+        # Session cache missing - reload from DB
+        db = get_db(); customer = get_first_customer(db)
+        if not customer: return jsonify({"error": "No active avatar"}), 404
+        uid = session["user_id"]; cid = customer["id"]
+        ctx = build_context(db, cid, uid, text)
+        if not ctx:
+            ctx = f"You are {customer['name']}. Be warm and friendly."
+        with db.cursor() as cur:
+            cur.execute("SELECT name FROM ava_users WHERE id=%s", (uid,)); row = cur.fetchone()
+            cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s AND customer_id=%s ORDER BY timestamp DESC LIMIT 20", (uid, cid))
+            history = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(cur.fetchall())]
+        cache = {"ctx": ctx, "history": history, "speaker_name": row["name"] if row else "Guest",
+                 "cid": cid, "uid": uid, "voice_id": customer.get("voice_id"), "pending_messages": []}
+        _CONV_CACHE[sid] = cache
+
+    ctx = cache["ctx"]
+    history = cache["history"]
+    speaker_name = cache["speaker_name"]
+    voice_id = cache["voice_id"] or ELEVENLABS_VOICE_ID
+
+    # Add user message to in-memory history immediately
+    cache["history"].append({"speaker": "user", "text": text})
+    cache["pending_messages"].append(("user", text))
 
     import re, json as _json
 
     def generate():
-        convo = "\n".join(f"{m['speaker']}: {m['text']}" for m in recent[-10:])
+        convo = "\n".join(f"{m['speaker']}: {m['text']}" for m in history[-12:])
         system = f"""You ARE this person, speaking in first person. Stay in character; never say you are an AI.
-Use ONLY the knowledge below. Keep replies 1-3 SHORT spoken sentences. Be concise.
-{ctx or '(Speak warmly.)'}"""
-        prompt = f"Recent:\n{convo}\n\n{speaker_name}: \"{text}\"\n\nYour reply (1-2 sentences max):"
+Use ONLY the knowledge below. Keep replies 1-2 SHORT spoken sentences. Be natural and concise.
+{ctx}"""
+        prompt = f"Conversation so far:\n{convo}\n\n{speaker_name}: \"{text}\"\n\nYour reply:"
 
-        # Use flash model for speed
-        fast_model = "gemini-2.5-flash"
         cfg = genai_types.GenerateContentConfig(temperature=0.7, system_instruction=system)
         full_reply = []
         buf = ""
@@ -616,19 +648,16 @@ Use ONLY the knowledge below. Keep replies 1-3 SHORT spoken sentences. Be concis
 
         try:
             for chunk in _genai_client.models.generate_content_stream(
-                model=fast_model, contents=prompt, config=cfg
+                model=GEMINI_MODEL, contents=prompt, config=cfg
             ):
                 piece = chunk.text or ""
                 buf += piece
                 full_reply.append(piece)
                 word_count += piece.count(" ")
-                # flush on sentence end OR every ~8 words to reduce latency
-                flush = False
-                flush_text = ""
+                flush = False; flush_text = ""
                 if re.search(r'[.!?]\s*$', buf):
                     flush = True; flush_text = buf.strip(); buf = ""
                 elif word_count >= 8 and " " in buf:
-                    # flush at last space boundary
                     last_space = buf.rfind(" ")
                     flush_text = buf[:last_space].strip()
                     buf = buf[last_space+1:]
@@ -636,7 +665,6 @@ Use ONLY the knowledge below. Keep replies 1-3 SHORT spoken sentences. Be concis
                 if flush and flush_text:
                     wav_b64, pcm_b64 = _tts_sentence(flush_text, voice_id)
                     yield _json.dumps({"text": flush_text, "audio": wav_b64, "pcm": pcm_b64}) + "\n"
-            # flush remainder
             if buf.strip():
                 wav_b64, pcm_b64 = _tts_sentence(buf.strip(), voice_id)
                 yield _json.dumps({"text": buf.strip(), "audio": wav_b64, "pcm": pcm_b64}) + "\n"
@@ -644,14 +672,10 @@ Use ONLY the knowledge below. Keep replies 1-3 SHORT spoken sentences. Be concis
             yield _json.dumps({"error": str(e)}) + "\n"
             return
 
-        # store avatar reply only (user message already stored above)
         full_text = "".join(full_reply).strip()
-        try:
-            db2 = get_db()
-            store_message(db2, cid, uid, "avatar", full_text, sid)
-            db2.commit()
-        except Exception as e:
-            app.logger.error(f"DB store error: {e}")
+        # Add avatar reply to in-memory history
+        cache["history"].append({"speaker": "avatar", "text": full_text})
+        cache["pending_messages"].append(("avatar", full_text))
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream",
                     headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache",
@@ -688,6 +712,47 @@ def _tts_sentence(text, voice_id):
     except Exception as e:
         app.logger.error(f"TTS stream error: {e}")
     return None, None
+
+@app.route("/u/end_session", methods=["GET","POST"])
+def u_end_session():
+    """Flush in-memory conversation to DB and run RAG indexing. Called on Leave."""
+    sid = session.get("session_id")
+    cache = _CONV_CACHE.pop(sid, None)
+    if not cache or not cache.get("pending_messages"):
+        return jsonify({"ok": True, "flushed": 0})
+
+    cid = cache["cid"]; uid = cache["uid"]
+    pending = cache["pending_messages"]
+    try:
+        db = get_db()
+        for speaker, text in pending:
+            store_message(db, cid, uid, speaker, text, sid)
+        db.commit()
+        # Run ego extraction on the full conversation in background-style
+        full_text = " ".join(t for _, t in pending)
+        import threading
+        def _bg_rag():
+            try:
+                ego = extract_ego(full_text, "", "conversation")
+                with psycopg2.connect(DATABASE_URL) as db2:
+                    with db2.cursor() as cur2:
+                        for ch in ego.get("raw_chunks", []):
+                            if ch.get("chunk"):
+                                vis = "restricted" if ch.get("sensitive") else "public"
+                                emb = embed(ch["chunk"])
+                                if emb:
+                                    cur2.execute("""INSERT INTO ava_knowledge_base
+                                        (customer_id,chunk,source_session_id,category,ego_layer,created_at,visibility,embedding)
+                                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s::vector)""",
+                                        (cid, ch["chunk"], sid, ch.get("category","fact"), "raw",
+                                         datetime.utcnow().isoformat(), vis, vec_literal(emb)))
+                    db2.commit()
+            except Exception as e:
+                print(f"BG RAG error: {e}")
+        threading.Thread(target=_bg_rag, daemon=True).start()
+        return jsonify({"ok": True, "flushed": len(pending)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ════════════════════════════════ CUSTOMER PORTAL ════════════════════════════
 
