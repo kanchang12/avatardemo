@@ -562,6 +562,13 @@ def user_talk_stream():
     speaker_name = row["name"] if row else "Guest"
     ctx = build_context(db, cid, uid, text)
 
+    # Store user message immediately so next turn has history
+    try:
+        store_message(db, cid, uid, "user", text, sid)
+        db.commit()
+    except Exception as e:
+        app.logger.error(f"pre-store error: {e}")
+
     import re, json as _json
 
     def generate():
@@ -601,11 +608,10 @@ Use ONLY the knowledge below. Keep replies 1-4 spoken sentences.
             yield _json.dumps({"error": str(e)}) + "\n"
             return
 
-        # store full reply in DB - fresh connection inside generator
+        # store avatar reply only (user message already stored above)
         full_text = "".join(full_reply).strip()
         try:
             db2 = get_db()
-            store_message(db2, cid, uid, "user", text, sid)
             store_message(db2, cid, uid, "avatar", full_text, sid)
             db2.commit()
         except Exception as e:
