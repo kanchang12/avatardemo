@@ -598,7 +598,7 @@ Use ONLY the knowledge below. Keep replies 1-3 SHORT spoken sentences. Be concis
         prompt = f"Recent:\n{convo}\n\n{speaker_name}: \"{text}\"\n\nYour reply (1-2 sentences max):"
 
         # Use flash model for speed
-        fast_model = "gemini-2.0-flash"
+        fast_model = "gemini-2.5-flash"
         cfg = genai_types.GenerateContentConfig(temperature=0.7, system_instruction=system)
         full_reply = []
         buf = ""
