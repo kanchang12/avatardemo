@@ -32,12 +32,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 .nav .who{margin-left:auto;font-size:.82rem;color:var(--muted)}
 .nav button{background:transparent;border:1px solid var(--line2);color:var(--muted);padding:6px 14px;border-radius:16px;cursor:pointer;font-size:.8rem}
 .body{display:flex;flex:1;overflow:hidden}
-.stage{flex:1;background:radial-gradient(ellipse at 50% 35%,#16162a,#0a0a0f);position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:24px}
-.avatar-wrap{position:relative;width:min(46vh,360px);height:min(46vh,360px);border-radius:50%;overflow:hidden;
-  border:3px solid var(--line2);box-shadow:0 0 0 0 rgba(167,139,250,0);transition:box-shadow .3s,border-color .3s}
-.avatar-wrap.talking{border-color:var(--green);box-shadow:0 0 40px 6px rgba(74,222,128,.35);animation:pulse 1.4s ease-in-out infinite}
-@keyframes pulse{50%{box-shadow:0 0 60px 12px rgba(74,222,128,.5)}}
-.avatar-wrap img{width:100%;height:100%;object-fit:cover}
+.stage{flex:1;background:#0a0a0f;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0}
+.avatar-wrap{position:relative;width:100%;height:100%;overflow:hidden;outline:4px solid transparent;outline-offset:-4px;transition:outline-color .3s}
+.avatar-wrap.talking{outline-color:var(--green);box-shadow:inset 0 0 60px 12px rgba(74,222,128,.25);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:inset 0 0 90px 20px rgba(74,222,128,.4)}}
+.avatar-wrap img,.avatar-wrap video{width:100%;height:100%;object-fit:cover;object-position:50% 15%;display:block}
+.avatar-wrap video{display:none}
 .stage-name{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);font-size:.95rem;color:#cfcfe6;letter-spacing:1px}
 .voicewarn{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#2a1010;border:1px solid var(--red);color:#fca5a5;
   font-size:.74rem;padding:6px 12px;border-radius:10px;display:none;max-width:90%;text-align:center}
@@ -57,7 +57,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 .send{background:var(--accent)}.send:disabled{background:var(--line2);color:#555}
 .mic{background:#15151f;border:1px solid var(--line2)!important}
 .mic.rec{background:var(--red);border-color:var(--red)!important}
-@media(max-width:760px){.body{flex-direction:column}.side{width:100%;border-left:none;border-top:1px solid var(--line)}.stage{height:40vh}.avatar-wrap{width:30vh;height:30vh}}
+@media(max-width:760px){.body{flex-direction:column}.side{width:100%;border-left:none;border-top:1px solid var(--line)}.stage{height:55vh}}
 </style>
 </head>
 <body>
@@ -83,7 +83,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
   <div class="body">
     <div class="stage">
       <div class="voicewarn" id="voicewarn"></div>
-      <div class="avatar-wrap" id="avatarWrap"><img src="/avatar/thumbnail" alt="avatar" onerror="this.style.opacity=.2"></div>
+      <div class="avatar-wrap" id="avatarWrap"><img id="avatarImg" src="/avatar/thumbnail" alt="avatar" onerror="this.style.opacity=.2"><video id="avatarVid" autoplay playsinline></video></div>
       <div class="stage-name" id="stageName"></div>
     </div>
     <div class="side">
@@ -104,10 +104,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 let gateStream=null, sessionId=null, handsFree=false;
 
 /* ── shared speech: ElevenLabs audio, else browser voice (always talks) ── */
-function speak(b64, text){
+function speak(b64, text, videoUrl){
   const wrap=document.getElementById('avatarWrap');
-  const done=()=>{ wrap.classList.remove('talking'); if(handsFree) startListening(); };
+  const img=document.getElementById('avatarImg');
+  const vid=document.getElementById('avatarVid');
+  const done=()=>{ wrap.classList.remove('talking'); vid.style.display='none'; img.style.display='block'; if(handsFree) startListening(); };
   wrap.classList.add('talking');
+  if(videoUrl){
+    img.style.display='none'; vid.style.display='block';
+    vid.src=videoUrl; vid.onended=done; vid.onerror=done;
+    vid.play().catch(done);
+    return;
+  }
   if(b64){
     const p=document.getElementById('player'); p.src='data:audio/mpeg;base64,'+b64;
     p.onended=done; p.onerror=()=>browserSpeak(text,done);
@@ -162,7 +170,7 @@ async function enterTalk(d){
   sessionId=sd.session_id;
   document.getElementById('stageName').textContent=sd.customer_name||'';
   showVoiceWarn(sd.voice_error);
-  if(sd.greeting){ addMsg('avatar',sd.greeting); speak(sd.greeting_audio, sd.greeting); }
+  if(sd.greeting){ addMsg('avatar',sd.greeting); speak(sd.greeting_audio, sd.greeting, sd.greeting_video); }
 }
 
 function addMsg(role,text){
@@ -179,7 +187,7 @@ async function sendMsg(){
     const d=await (await fetch('/u/talk',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({text:txt,session_id:sessionId})})).json();
     if(d.error){ addMsg('avatar','(error: '+d.error+')'); }
-    else{ addMsg('avatar',d.reply); showVoiceWarn(d.voice_error); speak(d.audio,d.reply); }
+    else{ addMsg('avatar',d.reply); showVoiceWarn(d.voice_error); speak(d.audio,d.reply,d.video); }
   }catch(e){ addMsg('avatar','(connection problem)'); }
   document.getElementById('sendBtn').disabled=false;
 }

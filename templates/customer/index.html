@@ -17,8 +17,19 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
 .panel h3{font-size:.95rem;margin-bottom:4px}
 .panel .desc{font-size:.8rem;color:var(--muted);margin-bottom:16px;line-height:1.6}
 .camrow{display:flex;gap:14px;align-items:flex-start}
-video.cam{width:55%;border-radius:14px;background:#000;aspect-ratio:4/3;object-fit:cover;border:1px solid var(--line2)}
-video.cam.talking{border-color:var(--green);box-shadow:0 0 26px rgba(74,222,128,.35)}
+video.cam{display:none}
+.avatar-preview{width:55%;border-radius:14px;background:#000;aspect-ratio:4/3;object-fit:cover;object-position:50% 15%;border:2px solid var(--line2);transition:border-color .3s,box-shadow .3s}
+.avatar-preview.talking{border-color:var(--green);box-shadow:0 0 26px rgba(74,222,128,.35)}
+.rec-section{margin-top:20px;background:#15151f;border:1px solid var(--line2);border-radius:14px;padding:16px}
+.rec-section h4{font-size:.85rem;color:var(--accent);margin-bottom:4px}
+.rec-section .rdesc{font-size:.78rem;color:var(--muted);margin-bottom:12px;line-height:1.5}
+video.selfcam{width:100%;border-radius:10px;background:#000;aspect-ratio:16/9;object-fit:cover;border:1px solid var(--line2);margin-bottom:10px}
+video.selfcam.recording{border-color:var(--red);box-shadow:0 0 16px rgba(248,113,113,.3)}
+.recbtns{display:flex;gap:8px}
+.recbtns button{flex:1;padding:10px;border:none;border-radius:9px;cursor:pointer;font-size:.84rem;font-weight:600}
+.btn-record{background:var(--red);color:#fff}.btn-record:disabled{background:var(--line2);color:#555}
+.btn-stoprec{background:#15151f;border:1px solid var(--line2)!important;color:#fff}.btn-stoprec:disabled{background:var(--line2);color:#555}
+.rec-timer{font-size:.8rem;color:var(--red);margin-top:6px;min-height:1em}
 .qbox{flex:1;background:#15151f;border:1px solid var(--line2);border-radius:14px;padding:14px;min-height:120px}
 .qbox .lbl{font-size:.72rem;color:var(--green);font-weight:600;margin-bottom:6px}
 .qbox .q{font-size:1rem;line-height:1.5;color:#eaeaf5}
@@ -48,7 +59,7 @@ textarea:focus{border-color:var(--accent)}
 .reci{display:flex;align-items:center;gap:10px;font-size:.8rem;color:#ccc;background:#15151f;border:1px solid var(--line2);border-radius:10px;padding:8px 10px}
 .reci a{color:var(--accent);text-decoration:none;margin-left:auto}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#15151f;border:1px solid var(--green);color:#fff;padding:11px 18px;border-radius:10px;font-size:.85rem;display:none;z-index:50}
-@media(max-width:900px){.wrap{grid-template-columns:1fr}.camrow{flex-direction:column}video.cam{width:100%}}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}.camrow{flex-direction:column}.avatar-preview{width:100%}}
 </style>
 </head>
 <body>
@@ -59,9 +70,21 @@ textarea:focus{border-color:var(--accent)}
     <h3>Your twin is interviewing you</h3>
     <p class="desc">Press start. Your twin asks you questions out loud — you answer by speaking. It listens, learns, and keeps the conversation going. The whole session is recorded.</p>
     <div class="voicewarn" id="voicewarn"></div>
+    <video class="cam" id="cam" autoplay playsinline muted style="display:none"></video>
     <div class="camrow">
-      <video class="cam" id="cam" autoplay playsinline muted></video>
+      <img class="avatar-preview" id="avatarImg" src="/avatar/thumbnail" alt="Peter">
       <div class="qbox"><div class="lbl">YOUR TWIN ASKS</div><div class="q" id="question">Press “Start conversation” and your twin will greet you.</div></div>
+    </div>
+
+    <div class="rec-section">
+      <h4>&#127909; Record yourself &mdash; voice &amp; face training data</h4>
+      <p class="rdesc">Record yourself speaking naturally. These clips train Peter’s voice clone and avatar. Aim 2–5 min, clear audio, good lighting.</p>
+      <video class="selfcam" id="selfCam" autoplay playsinline muted></video>
+      <div class="recbtns">
+        <button class="btn-record" id="recStartBtn">&#9210; Start recording</button>
+        <button class="btn-stoprec" id="recStopBtn" disabled>&#9209; Stop &amp; save</button>
+      </div>
+      <div class="rec-timer" id="recTimer"></div>
     </div>
     <div class="rowbtns">
       <button class="b start" id="startBtn">● Start conversation</button>
@@ -116,9 +139,7 @@ async function boot(){
   showVoiceWarn(d.voice_error);
   window._opening=d.opening; window._openingAudio=d.opening_audio;
   loadRecordings();
-  try{ camStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-    document.getElementById('cam').srcObject=camStream; }
-  catch(e){ setStatus('Camera/mic blocked — allow access to record.'); }
+  // camera starts when Peter clicks Start recording
 }
 boot();
 
@@ -129,9 +150,9 @@ function toast(t){ const el=document.getElementById('toast'); el.textContent=t; 
 
 /* ── twin speaks (ElevenLabs, else browser), then listens ── */
 function twinSpeak(b64,text,then){
-  const cam=document.getElementById('cam'); cam.classList.add('talking');
+  const av=document.getElementById('avatarImg'); av.classList.add('talking');
   document.getElementById('question').textContent=text;
-  const done=()=>{ cam.classList.remove('talking'); then&&then(); };
+  const done=()=>{ av.classList.remove('talking'); then&&then(); };
   if(b64){ const p=document.getElementById('player'); p.src='data:audio/mpeg;base64,'+b64;
     p.onended=done; p.onerror=()=>browserSpeak(text,done); p.play().catch(()=>browserSpeak(text,done)); }
   else browserSpeak(text,done);
@@ -274,6 +295,60 @@ async function savePolicy(id){
   toast('Disclosure rule saved.');
 }
 loadPrivacy();
+
+/* ── self-recording (voice/face training data) ── */
+let selfStream=null, selfRecorder=null, selfChunks=[], selfTimerInterval=null, selfSeconds=0;
+
+async function initSelfCam(){
+  try{
+    selfStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    document.getElementById('selfCam').srcObject = selfStream;
+    document.getElementById('cam').srcObject = selfStream;
+    camStream = selfStream;
+  } catch(e){ setStatus('Camera/mic blocked — allow access.'); }
+}
+
+document.getElementById('recStartBtn').onclick = async ()=>{
+  if(!selfStream){ await initSelfCam(); if(!selfStream){ alert('Allow camera access first.'); return; } }
+  selfChunks=[];
+  const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+  selfRecorder = new MediaRecorder(selfStream, {mimeType:mime});
+  selfRecorder.ondataavailable = e=>{ if(e.data.size>0) selfChunks.push(e.data); };
+  selfRecorder.onstop = uploadSelfRecording;
+  selfRecorder.start(1000);
+  selfSeconds=0;
+  selfTimerInterval = setInterval(()=>{
+    selfSeconds++;
+    const m=Math.floor(selfSeconds/60), s=selfSeconds%60;
+    document.getElementById('recTimer').textContent = '⏺ Recording: '+m+':'+String(s).padStart(2,'0');
+  }, 1000);
+  document.getElementById('selfCam').classList.add('recording');
+  document.getElementById('recStartBtn').disabled=true;
+  document.getElementById('recStopBtn').disabled=false;
+};
+
+document.getElementById('recStopBtn').onclick = ()=>{
+  if(selfRecorder && selfRecorder.state!=='inactive') selfRecorder.stop();
+  clearInterval(selfTimerInterval);
+  document.getElementById('recTimer').textContent='Saving…';
+  document.getElementById('selfCam').classList.remove('recording');
+  document.getElementById('recStartBtn').disabled=false;
+  document.getElementById('recStopBtn').disabled=true;
+};
+
+async function uploadSelfRecording(){
+  const blob = new Blob(selfChunks,{type:'video/webm'});
+  const fd = new FormData();
+  fd.append('file', blob, 'training_'+Date.now()+'.webm');
+  fd.append('session_id', sessionId||'');
+  fd.append('transcript','[voice training recording]');
+  try{
+    const d = await (await fetch('/customer/upload_recording',{method:'POST',body:fd})).json();
+    document.getElementById('recTimer').textContent = d.ok ? 'Saved ('+Math.round((d.size_bytes||0)/1024)+' KB).' : 'Upload failed.';
+    loadRecordings();
+  } catch(e){ document.getElementById('recTimer').textContent='Upload error.'; }
+}
+
 </script>
 </body>
 </html>
