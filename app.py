@@ -365,13 +365,14 @@ def elevenlabs_tts(text, voice_id=None):
 
 # ── LiveAvatar session token ──────────────────────────────────────────────────
 
-def liveavatar_create_session_token():
-    """Create a LiveAvatar LITE mode session token using ElevenLabs Agent connector."""
+def liveavatar_start():
+    """Create token + start session. Returns livekit_url, livekit_client_token, session_id, error."""
     if not LIVEAVATAR_API_KEY or not LIVEAVATAR_AVATAR_ID:
-        return None, None, "Missing LIVEAVATAR_API_KEY or LIVEAVATAR_AVATAR_ID"
+        return None, None, None, "Missing LIVEAVATAR_API_KEY or LIVEAVATAR_AVATAR_ID"
     if not LIVEAVATAR_SECRET_ID or not ELEVENLABS_AGENT_ID:
-        return None, None, "Missing LIVEAVATAR_SECRET_ID or ELEVENLABS_AGENT_ID"
+        return None, None, None, "Missing LIVEAVATAR_SECRET_ID or ELEVENLABS_AGENT_ID"
     try:
+        # Step 1: create session token
         r = requests.post(
             "https://api.liveavatar.com/v1/sessions/token",
             headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
@@ -385,12 +386,24 @@ def liveavatar_create_session_token():
             },
             timeout=30
         )
-        if r.status_code == 200:
-            data = r.json().get("data", {})
-            return data.get("session_token"), data.get("session_id"), None
-        return None, None, f"LiveAvatar {r.status_code}: {r.text[:200]}"
+        if r.status_code != 200:
+            return None, None, None, f"Token {r.status_code}: {r.text[:200]}"
+        token_data = r.json().get("data", {})
+        session_token = token_data.get("session_token")
+        session_id    = token_data.get("session_id")
+
+        # Step 2: start session
+        r2 = requests.post(
+            "https://api.liveavatar.com/v1/sessions/start",
+            headers={"Authorization": f"Bearer {session_token}", "Content-Type": "application/json"},
+            timeout=30
+        )
+        if r2.status_code not in (200, 201):
+            return None, None, None, f"Start {r2.status_code}: {r2.text[:200]}"
+        start_data = r2.json().get("data", {})
+        return start_data.get("livekit_url"), start_data.get("livekit_client_token"), session_id, None
     except Exception as e:
-        return None, None, f"LiveAvatar exception: {e}"
+        return None, None, None, f"LiveAvatar exception: {e}"
 
 # ── face recognition (identity gate) ─────────────────────────────────────────────
 
@@ -420,11 +433,11 @@ def find_face(db, enc):
 
 @app.route("/u/liveavatar_token", methods=["POST"])
 def u_liveavatar_token():
-    """Frontend calls this to get a LiveAvatar session token."""
-    token, session_id, err = liveavatar_create_session_token()
+    """Frontend calls this to start a LiveAvatar session and get LiveKit credentials."""
+    livekit_url, livekit_token, session_id, err = liveavatar_start()
     if err:
         return jsonify({"error": err}), 500
-    return jsonify({"session_token": token, "session_id": session_id})
+    return jsonify({"livekit_url": livekit_url, "livekit_token": livekit_token, "session_id": session_id})
 
 @app.route("/")
 def user_home(): return render_template("user/index.html")
