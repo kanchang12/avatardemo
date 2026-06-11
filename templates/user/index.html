@@ -93,38 +93,40 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:#fff
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js">
+<script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+<script>
 /* ── mic / voice input ── */
 let mediaRecorder=null, audioChunks=[], micOn=false;
-document.getElementById('micBtn').onclick = async ()=>{
-  if(!micOn){
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks=[];
-      mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) audioChunks.push(e.data); };
-      mediaRecorder.onstop = async ()=>{
-        const blob = new Blob(audioChunks,{type:'audio/webm'});
-        const fd = new FormData(); fd.append('audio',blob,'speech.webm');
-        try{
-          const d=await(await fetch('/u/transcribe',{method:'POST',body:fd})).json();
-          if(d.text){ document.getElementById('msgInp').value=d.text; sendText(); }
-        } catch(e){ console.error('transcribe error',e); }
-        stream.getTracks().forEach(t=>t.stop());
-      };
-      mediaRecorder.start();
-      micOn=true;
-      document.getElementById('micBtn').classList.add('rec');
-      document.getElementById('micBtn').textContent='⏹';
-    } catch(e){ showWarn('Mic access denied'); }
-  } else {
-    if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
-    micOn=false;
-    document.getElementById('micBtn').classList.remove('rec');
-    document.getElementById('micBtn').textContent='🎙';
-  }
-};
-
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('micBtn').onclick = async ()=>{
+    if(!micOn){
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks=[];
+        mediaRecorder.ondataavailable = e=>{ if(e.data.size>0) audioChunks.push(e.data); };
+        mediaRecorder.onstop = async ()=>{
+          const blob = new Blob(audioChunks,{type:'audio/webm'});
+          const fd = new FormData(); fd.append('audio',blob,'speech.webm');
+          try{
+            const d=await(await fetch('/u/transcribe',{method:'POST',body:fd})).json();
+            if(d.text){ document.getElementById('msgInp').value=d.text; sendText(); }
+          } catch(e){ console.error('transcribe error',e); }
+          stream.getTracks().forEach(t=>t.stop());
+        };
+        mediaRecorder.start();
+        micOn=true;
+        document.getElementById('micBtn').classList.add('rec');
+        document.getElementById('micBtn').textContent='⏹';
+      } catch(e){ showWarn('Mic access denied'); }
+    } else {
+      if(mediaRecorder && mediaRecorder.state!=='inactive') mediaRecorder.stop();
+      micOn=false;
+      document.getElementById('micBtn').classList.remove('rec');
+      document.getElementById('micBtn').textContent='🎙';
+    }
+  };
+});
 </script>
 <script>
 let gateStream=null, livekitRoom=null, avatarWs=null, wsReady=false, sdSession=null;
@@ -167,6 +169,7 @@ async function enterTalk(d){
   sdSession=await(await fetch('/u/session',{method:'POST'})).json();
   if(sdSession.customer_name) document.getElementById('stageName').textContent=sdSession.customer_name;
   if(sdSession.greeting) addMsg('avatar',sdSession.greeting);
+  if(sdSession.greeting_audio) playMp3(sdSession.greeting_audio, sdSession.greeting);
 
   await startLiveAvatar();
 }
@@ -209,9 +212,6 @@ async function startLiveAvatar(){
         if(msg.type==='session.state_updated' && msg.state==='connected'){
           wsReady=true;
           showBadge('Connected'); setTimeout(()=>document.getElementById('statusBadge').className='status-badge',2000);
-          // play greeting
-          if(sdSession?.greeting_pcm) speakPCM(sdSession.greeting_pcm);
-          else if(sdSession?.greeting_audio) playMp3(sdSession.greeting_audio, sdSession.greeting);
         }
         if(msg.type==='agent.speak_started'){
           document.getElementById('avatarImg').style.display='none';
@@ -282,9 +282,7 @@ async function leaveSession(){
 }
 
 /* ── fallback ── */
-function fallback(){
-  if(sdSession?.greeting_audio) playMp3(sdSession.greeting_audio, sdSession.greeting);
-}
+function fallback(){ /* greeting already shown in chat */ }
 function playMp3(b64,text){
   if(b64){ const a=new Audio('data:audio/mpeg;base64,'+b64); a.play().catch(()=>browserSpeak(text)); }
   else browserSpeak(text);
