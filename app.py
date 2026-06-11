@@ -24,6 +24,8 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
 ELEVENLABS_MODEL    = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 LIVEAVATAR_API_KEY  = os.getenv("LIVEAVATAR_API_KEY", "")
 LIVEAVATAR_AVATAR_ID= os.getenv("LIVEAVATAR_AVATAR_ID", "")
+LIVEAVATAR_SECRET_ID= os.getenv("LIVEAVATAR_SECRET_ID", "")  # secret_id from registering ElevenLabs key with LiveAvatar
+ELEVENLABS_AGENT_ID = os.getenv("ELEVENLABS_AGENT_ID", "")   # ElevenLabs Conversational AI agent ID
 RECORDINGS_DIR      = os.getenv("RECORDINGS_DIR", os.path.join(os.path.dirname(__file__), "recordings"))
 FACE_TOLERANCE      = float(os.getenv("FACE_TOLERANCE", "0.42"))  # tighter = stricter identity gate
 TOPK_SEMANTIC       = int(os.getenv("TOPK_SEMANTIC", "6"))
@@ -361,36 +363,34 @@ def elevenlabs_tts(text, voice_id=None):
     except Exception as e:
         return None, f"ElevenLabs exception: {e}"
 
-# ── LiveAvatar (talking head video) ─────────────────────────────────────────────
+# ── LiveAvatar session token ──────────────────────────────────────────────────
 
-def liveavatar_generate(text, voice_id=None):
-    """Generate a talking avatar video via LiveAvatar API. Returns (video_url, error)."""
-    if not LIVEAVATAR_API_KEY:
-        return None, "Missing LIVEAVATAR_API_KEY"
-    if not LIVEAVATAR_AVATAR_ID:
-        return None, "Missing LIVEAVATAR_AVATAR_ID"
+def liveavatar_create_session_token():
+    """Create a LiveAvatar LITE mode session token using ElevenLabs Agent connector."""
+    if not LIVEAVATAR_API_KEY or not LIVEAVATAR_AVATAR_ID:
+        return None, None, "Missing LIVEAVATAR_API_KEY or LIVEAVATAR_AVATAR_ID"
+    if not LIVEAVATAR_SECRET_ID or not ELEVENLABS_AGENT_ID:
+        return None, None, "Missing LIVEAVATAR_SECRET_ID or ELEVENLABS_AGENT_ID"
     try:
-        # Step 1: get TTS audio from ElevenLabs
-        audio_b64, err = elevenlabs_tts(text, voice_id)
-        if not audio_b64:
-            return None, f"TTS failed: {err}"
-        # Step 2: send to LiveAvatar
         r = requests.post(
-            "https://api.liveavatar.ai/v1/avatar/talk",
-            headers={"Authorization": f"Bearer {LIVEAVATAR_API_KEY}", "Content-Type": "application/json"},
+            "https://api.liveavatar.com/v1/sessions/token",
+            headers={"X-API-KEY": LIVEAVATAR_API_KEY, "Content-Type": "application/json"},
             json={
+                "mode": "LITE",
                 "avatar_id": LIVEAVATAR_AVATAR_ID,
-                "audio": audio_b64,
-                "audio_format": "mp3"
+                "elevenlabs_agent_config": {
+                    "secret_id": LIVEAVATAR_SECRET_ID,
+                    "agent_id": ELEVENLABS_AGENT_ID
+                }
             },
-            timeout=60
+            timeout=30
         )
         if r.status_code == 200:
-            data = r.json()
-            return data.get("video_url") or data.get("url"), None
-        return None, f"LiveAvatar {r.status_code}: {r.text[:160]}"
+            data = r.json().get("data", {})
+            return data.get("session_token"), data.get("session_id"), None
+        return None, None, f"LiveAvatar {r.status_code}: {r.text[:200]}"
     except Exception as e:
-        return None, f"LiveAvatar exception: {e}"
+        return None, None, f"LiveAvatar exception: {e}"
 
 # ── face recognition (identity gate) ─────────────────────────────────────────────
 
@@ -417,6 +417,14 @@ def find_face(db, enc):
     return None
 
 # ════════════════════════════════ USER PORTAL ════════════════════════════════
+
+@app.route("/u/liveavatar_token", methods=["POST"])
+def u_liveavatar_token():
+    """Frontend calls this to get a LiveAvatar session token."""
+    token, session_id, err = liveavatar_create_session_token()
+    if err:
+        return jsonify({"error": err}), 500
+    return jsonify({"session_token": token, "session_id": session_id})
 
 @app.route("/")
 def user_home(): return render_template("user/index.html")
@@ -477,10 +485,8 @@ def user_session():
     ctx = build_context(db, customer["id"], session["user_id"], "greeting hello")
     greeting = gemini_reply(ctx, [], f"(A person named {uname} just arrived. Greet them warmly in one or two sentences.)", uname)
     g_audio, g_err = elevenlabs_tts(greeting, customer.get("voice_id"))
-    g_video, g_verr = liveavatar_generate(greeting, customer.get("voice_id")) if LIVEAVATAR_API_KEY else (None, None)
     return jsonify({"session_id": sid, "customer_name": customer["name"], "greeting": greeting,
-                    "greeting_audio": g_audio, "greeting_video": g_video,
-                    "voice_error": g_err or g_verr, "brain_error": _LAST_GEMINI_ERROR})
+                    "greeting_audio": g_audio, "voice_error": g_err, "brain_error": _LAST_GEMINI_ERROR})
 
 @app.route("/u/talk", methods=["POST"])
 def user_talk():
@@ -502,9 +508,7 @@ def user_talk():
     store_message(db, cid, uid, "avatar", reply, sid)
     db.commit()
     audio, verr = elevenlabs_tts(reply, customer.get("voice_id"))
-    video, vverr = liveavatar_generate(reply, customer.get("voice_id")) if LIVEAVATAR_API_KEY else (None, None)
-    return jsonify({"reply": reply, "audio": audio, "video": video,
-                    "voice_error": verr or vverr, "brain_error": _LAST_GEMINI_ERROR})
+    return jsonify({"reply": reply, "audio": audio, "voice_error": verr, "brain_error": _LAST_GEMINI_ERROR})
 
 # ════════════════════════════════ CUSTOMER PORTAL ════════════════════════════
 
@@ -728,7 +732,7 @@ def admin_stats():
 # ── misc ─────────────────────────────────────────────────────────────────────
 @app.route("/avatar/thumbnail")
 def avatar_thumbnail():
-    local = os.path.join(os.path.dirname(__file__), "static", "petar.jpg")
+    local = os.path.join(os.path.dirname(__file__), "static", "avatar.jpg")
     if os.path.exists(local): return send_file(local, mimetype="image/jpeg")
     return jsonify({"error": "No image"}), 404
 
