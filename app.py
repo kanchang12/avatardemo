@@ -522,27 +522,24 @@ def user_session():
     session["session_id"] = sid
     uname = urow["name"] if urow else "there"
 
-    # Build context ONCE and cache it in memory
+    # Build context ONCE and store in Flask session (survives across workers)
     ctx = build_context(db, cid, uid, "who is this person greeting")
     if not ctx:
-        # Standard fallback context if no memories yet
-        ctx = f"You are {customer['name']}. You are warm, friendly, and curious. You don't know this person well yet — invite them to talk."
+        ctx = f"You are {customer['name']}. You are warm, friendly and curious. You don't know this person well yet — invite them to talk and learn about them."
 
-    _CONV_CACHE[sid] = {
-        "ctx": ctx,
-        "history": history,
-        "speaker_name": uname,
-        "cid": cid,
-        "uid": uid,
-        "voice_id": customer.get("voice_id"),
-        "pending_messages": []  # buffer for DB flush on session end
-    }
+    # Store in Flask session — accessible on any worker
+    session["ctx"] = ctx
+    session["history"] = history[-20:]  # last 20 turns
+    session["speaker_name"] = uname
+    session["cid"] = cid
+    session["voice_id"] = customer.get("voice_id") or ""
 
     greeting = gemini_reply(ctx, history[-6:], f"(A person named {uname} just arrived. Greet them warmly in one sentence.)", uname)
     g_audio, g_err = elevenlabs_tts(greeting, customer.get("voice_id"))
-    # Add greeting to in-memory history
-    _CONV_CACHE[sid]["history"].append({"speaker": "avatar", "text": greeting})
-    _CONV_CACHE[sid]["pending_messages"].append(("avatar", greeting))
+
+    # Append greeting to session history
+    session["history"] = session["history"] + [{"speaker": "avatar", "text": greeting}]
+
     return jsonify({"session_id": sid, "customer_name": customer["name"], "greeting": greeting,
                     "greeting_audio": g_audio, "voice_error": g_err, "brain_error": _LAST_GEMINI_ERROR})
 
@@ -605,32 +602,24 @@ def user_talk_stream():
         return jsonify({"error": "Empty message"}), 400
 
     sid = session.get("session_id")
-    cache = _CONV_CACHE.get(sid)
+    uid = session.get("user_id")
+    cid = session.get("cid")
+    ctx = session.get("ctx", "")
+    history = list(session.get("history", []))
+    speaker_name = session.get("speaker_name", "Guest")
+    voice_id = session.get("voice_id") or ELEVENLABS_VOICE_ID
 
-    if not cache:
-        # Session cache missing - reload from DB
+    if not ctx:
+        # Fallback reload from DB if session lost ctx
         db = get_db(); customer = get_first_customer(db)
         if not customer: return jsonify({"error": "No active avatar"}), 404
-        uid = session["user_id"]; cid = customer["id"]
-        ctx = build_context(db, cid, uid, text)
-        if not ctx:
-            ctx = f"You are {customer['name']}. Be warm and friendly."
-        with db.cursor() as cur:
-            cur.execute("SELECT name FROM ava_users WHERE id=%s", (uid,)); row = cur.fetchone()
-            cur.execute("SELECT speaker, text FROM ava_messages WHERE user_id=%s AND customer_id=%s ORDER BY timestamp DESC LIMIT 20", (uid, cid))
-            history = [{"speaker": r["speaker"], "text": r["text"]} for r in reversed(cur.fetchall())]
-        cache = {"ctx": ctx, "history": history, "speaker_name": row["name"] if row else "Guest",
-                 "cid": cid, "uid": uid, "voice_id": customer.get("voice_id"), "pending_messages": []}
-        _CONV_CACHE[sid] = cache
+        cid = customer["id"]
+        ctx = build_context(db, cid, uid, text) or f"You are {customer['name']}. Be warm and friendly."
+        session["ctx"] = ctx; session["cid"] = cid
 
-    ctx = cache["ctx"]
-    history = cache["history"]
-    speaker_name = cache["speaker_name"]
-    voice_id = cache["voice_id"] or ELEVENLABS_VOICE_ID
-
-    # Add user message to in-memory history immediately
-    cache["history"].append({"speaker": "user", "text": text})
-    cache["pending_messages"].append(("user", text))
+    # Add user message to history
+    history.append({"speaker": "user", "text": text})
+    session["history"] = history[-30:]  # keep last 30 turns in session
 
     import re, json as _json
 
@@ -673,9 +662,19 @@ Use ONLY the knowledge below. Keep replies 1-2 SHORT spoken sentences. Be natura
             return
 
         full_text = "".join(full_reply).strip()
-        # Add avatar reply to in-memory history
-        cache["history"].append({"speaker": "avatar", "text": full_text})
-        cache["pending_messages"].append(("avatar", full_text))
+        # Persist to DB and update session history
+        try:
+            db2 = get_db()
+            store_message(db2, cid, uid, "user", text, sid)
+            store_message(db2, cid, uid, "avatar", full_text, sid)
+            db2.commit()
+        except Exception as e:
+            app.logger.error(f"DB store error: {e}")
+        # Update session history with avatar reply
+        h = list(session.get("history", []))
+        h.append({"speaker": "avatar", "text": full_text})
+        session["history"] = h[-30:]
+        session.modified = True
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream",
                     headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache",
